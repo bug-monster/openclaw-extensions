@@ -1,0 +1,61 @@
+{
+  "id": "switchbot",
+  "name": "SwitchBot",
+  "version": "0.1.0",
+  "description": "SwitchBot channel plugin for OpenClaw — real-time device status via AWS IoT Core",
+  "author": "SwitchBot Team",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": ["openclaw", "channel", "switchbot", "iot", "mqtt", "smart-home"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SwitchBot/openclaw-channel"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "openclaw": ">=2026.1.0"
+  },
+  "dependencies": {
+    "mqtt": "5.10.3",
+    "zod": "3.24.2"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.1.0"
+  },
+  "configSchema": {
+    "type": "object",
+    "required": ["token", "secret"],
+    "properties": {
+      "token": {
+        "type": "string",
+        "description": "SwitchBot API token from developer settings"
+      },
+      "secret": {
+        "type": "string",
+        "description": "SwitchBot API secret from developer settings"
+      },
+      "credentialEndpoint": {
+        "type": "string",
+        "default": "https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential",
+        "description": "SwitchBot IoT credential endpoint"
+      },
+      "deviceIds": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Device IDs to monitor (empty = all devices)"
+      },
+      "qos": {
+        "type": "number",
+        "enum": [0, 1, 2],
+        "default": 1,
+        "description": "MQTT QoS level"
+      },
+      "renewBeforeMs": {
+        "type": "number",
+        "default": 300000,
+        "description": "Renew credentials before expiry (milliseconds)"
+      }
+    }
+  }
+}

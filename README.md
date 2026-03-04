@@ -57,13 +57,14 @@ openclaw plugins install -l .
 ```json
 {
   "plugins": {
+    "enabled": true,
     "allow": ["switchbot"]
   },
   "channels": {
     "switchbot": {
       "enabled": true,
-      "token": "your_switchbot_token",
-      "secret": "your_switchbot_secret",
+      "token": "beb75f54fb2aed0ea6d6cc0444ebbe1b04b23d834125ccbbe7ef72652f51bcd64366b6f01beec8ffd6307ccd03c6e9fd",
+      "secret": "ba58a15a119678256c0d9fff00a607cb",
       "qos": 1,
       "renewBeforeMs": 300000
     }

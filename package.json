@@ -12,12 +12,25 @@
   },
   "openclaw": {
     "extensions": ["./dist/index.js"],
+    "channels": [
+      "switchbot"
+    ],
     "channel": {
       "id": "switchbot",
       "label": "SwitchBot",
       "selectionLabel": "SwitchBot (Smart Home)",
+      "docsPath": "/channels/switchbot",
+      "docsLabel": "switchbot",
       "blurb": "Real-time SwitchBot device status via AWS IoT Core MQTT",
-      "order": 85
+      "order": 85,
+      "aliases": [
+        "switchbot"
+      ]
+    },
+    "install": {
+      "npmSpec": "@switchbot/openclaw-channel",
+      "localPath": ".",
+      "defaultChoice": "npm"
     }
   },
   "dependencies": {

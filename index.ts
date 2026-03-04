@@ -5,6 +5,40 @@ import { toOpenClawMessage, validateDeviceEvent } from './src/message-handler';
 import { SwitchBotDeviceEvent } from './src/types';
 
 /**
+ * 从多种配置结构中提取 SwitchBot 配置
+ */
+function extractSwitchBotConfig(config: any, globalConfig?: any): any {
+  // 优先级顺序：
+  // 1. globalConfig.channels.switchbot
+  // 2. config.channels.switchbot
+  // 3. config (直接配置)
+
+  if (globalConfig?.channels?.switchbot) {
+    console.log('[SwitchBot Channel] 从全局配置 channels.switchbot 读取配置');
+    return globalConfig.channels.switchbot;
+  }
+
+  if (config?.channels?.switchbot) {
+    console.log('[SwitchBot Channel] 从配置 channels.switchbot 读取配置');
+    return config.channels.switchbot;
+  }
+
+  if (config?.token && config?.secret) {
+    console.log('[SwitchBot Channel] 从直接配置读取');
+    return config;
+  }
+
+  // 最后尝试：可能配置在其他地方
+  if (typeof globalThis !== 'undefined' && (globalThis as any).openclaw?.config?.channels?.switchbot) {
+    console.log('[SwitchBot Channel] 从全局 openclaw.config.channels.switchbot 读取配置');
+    return (globalThis as any).openclaw.config.channels.switchbot;
+  }
+
+  console.log('[SwitchBot Channel] 使用默认配置结构，配置对象:', config);
+  return config;
+}
+
+/**
  * SwitchBot Channel Plugin for OpenClaw
  * 通过 AWS IoT Core MQTT 实时接收 SwitchBot 设备状态变化
  */
@@ -14,8 +48,9 @@ class SwitchBotChannel {
   private config: SwitchBotConfig;
   private isStarted = false;
 
-  constructor(config: any) {
-    this.config = validateConfig(config);
+  constructor(config: any, globalConfig?: any) {
+    const channelConfig = extractSwitchBotConfig(config, globalConfig);
+    this.config = validateConfig(channelConfig);
   }
 
   /**
@@ -233,8 +268,9 @@ export const configSchema = {
 };
 
 // 创建插件实例的工厂函数
-export function create(config: any): SwitchBotChannel {
-  return new SwitchBotChannel(config);
+export function create(config: any, context?: any): SwitchBotChannel {
+  // 传递上下文给构造函数，这样可以访问全局配置
+  return new SwitchBotChannel(config, context?.globalConfig || context);
 }
 
 // 传统的默认导出（用于兼容性）

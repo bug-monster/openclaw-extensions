@@ -104,3 +104,19 @@ export interface ApiDetectionResult {
     toolsSupported: boolean;
   };
 }
+
+/** OpenClaw 运行时接口 */
+export interface OpenClawRuntime {
+  sendMessage?: (message: any) => Promise<void>;
+  log?: (level: string, message: string, meta?: any) => void;
+  config?: any;
+}
+
+/** SwitchBot 插件模块接口 */
+export interface SwitchbotPluginModule {
+  id: string;
+  name: string;
+  description: string;
+  configSchema: any;
+  register(api: any): void;
+}

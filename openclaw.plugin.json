@@ -40,11 +40,6 @@
         "default": "https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential",
         "description": "SwitchBot IoT credential endpoint"
       },
-      "deviceIds": {
-        "type": "array",
-        "items": { "type": "string" },
-        "description": "Device IDs to monitor (empty = all devices)"
-      },
       "qos": {
         "type": "number",
         "enum": [0, 1, 2],

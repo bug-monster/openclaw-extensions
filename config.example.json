@@ -8,12 +8,6 @@
       "token": "sb_your_token_here_replace_me",
       "secret": "your_secret_here_replace_me",
       "credentialEndpoint": "https://api.switchbot.com/v2/iot/credential",
-      "deviceIds": [
-        "comment: 留空表示订阅所有设备",
-        "comment: 或者指定特定设备ID，例如:",
-        "C271111111",
-        "H271111112"
-      ],
       "qos": 1,
       "renewBeforeMs": 300000
     }

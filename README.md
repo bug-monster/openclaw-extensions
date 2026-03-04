@@ -64,7 +64,6 @@ openclaw plugins install -l .
       "enabled": true,
       "token": "your_switchbot_token",
       "secret": "your_switchbot_secret",
-      "deviceIds": [],
       "qos": 1,
       "renewBeforeMs": 300000
     }
@@ -78,7 +77,6 @@ openclaw plugins install -l .
 |------|------|------|--------|------|
 | `token` | string | ✅ | - | SwitchBot API Token |
 | `secret` | string | ✅ | - | SwitchBot API Secret |
-| `deviceIds` | string[] | ❌ | `[]` | 要监控的设备ID列表，留空监控所有设备 |
 | `qos` | 0\|1\|2 | ❌ | `1` | MQTT QoS 级别 |
 | `renewBeforeMs` | number | ❌ | `300000` | 凭证到期前多久开始续期(毫秒) |
 
@@ -94,11 +92,7 @@ openclaw plugins install -l .
     "switchbot": {
       "enabled": true,
       "token": "your_token",
-      "secret": "your_secret",
-      "deviceIds": [
-        "C271111111",
-        "H271111112"
-      ]
+      "secret": "your_secret"
     }
   }
 }
@@ -245,7 +239,6 @@ npm install @switchbot/openclaw-channel
       "token": "your_switchbot_token_here",
       "secret": "your_switchbot_secret_here",
       "credentialEndpoint": "https://api.switchbot.com/v2/iot/credential",
-      "deviceIds": [],
       "qos": 1,
       "renewBeforeMs": 300000
     }
@@ -260,7 +253,6 @@ npm install @switchbot/openclaw-channel
 | `token` | string | ✅ | - | SwitchBot 平台颁发的 token |
 | `secret` | string | ✅ | - | SwitchBot secret for HMAC signing |
 | `credentialEndpoint` | string | ❌ | `https://api.switchbot.com/v2/iot/credential` | 凭证接口地址 |
-| `deviceIds` | string[] | ❌ | `[]` | 订阅的设备 ID 列表（空=订阅所有） |
 | `qos` | 0\|1 | ❌ | `1` | MQTT QoS 级别 |
 | `renewBeforeMs` | number | ❌ | `300000` | 凭证续期提前量（毫秒） |
 
@@ -292,7 +284,6 @@ SwitchBot 设备 → SwitchBot Cloud → AWS IoT Core (MQTT)
 
 ```
 参数:
-- deviceIds (可选): 设备ID列表
 - includeHistory (可选): 是否包含历史数据
 
 示例: "检查 SwitchBot 设备状态"

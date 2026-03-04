@@ -188,7 +188,6 @@ class SwitchBotChannel {
       credentialsValid: !!this.credentialService?.getCurrent(),
       config: {
         endpoint: this.config.credentialEndpoint,
-        deviceCount: this.config.deviceIds?.length || 0
       }
     };
   }
@@ -218,11 +217,6 @@ export const configSchema = {
       type: 'string',
       default: 'https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential',
       description: 'SwitchBot IoT credential endpoint'
-    },
-    deviceIds: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Device IDs to monitor (empty = all devices)'
     },
     qos: {
       type: 'number',

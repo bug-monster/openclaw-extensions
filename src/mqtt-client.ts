@@ -17,13 +17,20 @@ export function createIoTMqttClient(cred: IoTCredential, qos: 0 | 1 = 1): mqtt.M
   const fullRegion = mapToFullRegion(cred.region);
   const signedUrl = signV4Url(`wss://${cred.iotEndpoint}/mqtt`, cred, fullRegion);
 
+  console.log('[SwitchBot MQTT] Endpoint:', cred.iotEndpoint);
+  console.log('[SwitchBot MQTT] Region:', cred.region, '→', fullRegion);
+  console.log('[SwitchBot MQTT] ClientId:', cred.clientId);
+  console.log('[SwitchBot MQTT] Signed URL (truncated):', signedUrl.slice(0, 120) + '...');
+  console.log('[SwitchBot MQTT] Subscribe topic:', cred.topics.subscribe);
+  console.log('[SwitchBot MQTT] Has CA cert:', !!cred.caCertificate, 'length:', cred.caCertificate?.length);
+
   const client = mqtt.connect(signedUrl, {
     clientId: cred.clientId,
     protocolVersion: 5,
     clean: true,
     reconnectPeriod: 5000,
     connectTimeout: 30000,
-    ca: cred.caCertificate, // 添加 CA 证书
+    // WSS 连接使用系统 CA，不需要手动指定
   });
 
   // 只订阅，不 publish
@@ -42,11 +49,20 @@ export function createIoTMqttClient(cred: IoTCredential, qos: 0 | 1 = 1): mqtt.M
   });
 
   client.on('error', (error) => {
-    console.error('[SwitchBot] MQTT 连接错误:', error);
+    console.error('[SwitchBot] MQTT 连接错误:', error.message || error);
+    console.error('[SwitchBot] MQTT error detail:', JSON.stringify(error, Object.getOwnPropertyNames(error)).slice(0, 500));
   });
 
   client.on('offline', () => {
     console.warn('[SwitchBot] MQTT 连接断开，尝试重连中...');
+  });
+
+  client.on('close', () => {
+    console.warn('[SwitchBot] MQTT close event');
+  });
+
+  client.on('disconnect', (packet: any) => {
+    console.warn('[SwitchBot] MQTT disconnect packet:', JSON.stringify(packet));
   });
 
   client.on('reconnect', () => {
@@ -88,11 +104,13 @@ function signV4Url(url: string, cred: IoTCredential, fullRegion: string): string
     queryParams.set('X-Amz-Security-Token', credentials.sessionToken);
   }
 
-  // 创建待签名字符串
+  // 创建待签名字符串 — canonical query string 必须按参数名字母排序
+  const sortedParams = new URLSearchParams([...queryParams.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+
   const canonicalRequest = [
     'GET',
     '/mqtt',
-    queryParams.toString(),
+    sortedParams.toString(),
     `host:${urlObj.hostname}`,
     '',
     'host',
@@ -115,5 +133,7 @@ function signV4Url(url: string, cred: IoTCredential, fullRegion: string): string
 
   queryParams.set('X-Amz-Signature', signature);
 
-  return `${url}?${queryParams.toString()}`;
+  // 最终 URL 也用排序后的参数
+  const finalParams = new URLSearchParams([...queryParams.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+  return `${url}?${finalParams.toString()}`;
 }

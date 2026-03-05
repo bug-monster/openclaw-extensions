@@ -42,27 +42,46 @@ export class CredentialService {
   async fetch(): Promise<IoTCredential> {
     const ts = Date.now().toString();
     const nonce = "OpenClaw"; // 固定为 OpenClaw
-    const sign = this.computeSign(ts);
+    const sign = this.computeSign(ts, nonce);
+
+    const headers: Record<string, any> = {
+      'Authorization': this.token,
+      'sign': sign,
+      't': Number(ts),
+      'nonce': nonce,
+      'Content-Type': 'application/json',
+    };
+    const body = JSON.stringify({ instanceId: this.instanceId });
+
+    console.log('[SwitchBot Credential] Request URL:', this.endpoint);
+    console.log('[SwitchBot Credential] Request headers:', {
+      ...headers,
+      'Authorization': headers['Authorization']?.slice(0, 20) + '...',
+    });
+    console.log('[SwitchBot Credential] Request body:', body);
 
     const res = await fetch(this.endpoint, {
       method: 'POST',
-      headers: {
-        'Authorization': this.token,
-        'sign': sign,
-        't': ts,
-        'nonce': nonce,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ instanceId: this.instanceId }),
+      headers,
+      body,
     });
+
+    console.log('[SwitchBot Credential] Response status:', res.status, res.statusText);
+    const rawText = await res.text();
+    console.log('[SwitchBot Credential] Response body:', rawText.slice(0, 500));
 
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }
 
-    const data = await res.json();
+    const data = JSON.parse(rawText);
     if (data.statusCode !== 100) {
       throw new Error(`Credential fetch failed: ${data.message}`);
+    }
+
+    // 检查内层 statusCode
+    if (data.body?.statusCode !== 100) {
+      throw new Error(`SwitchBot IoT credential error (${data.body?.statusCode}): ${data.body?.message || 'unknown'}`);
     }
 
     this.current = CredentialResponse.parse(data).body.body;
@@ -70,8 +89,8 @@ export class CredentialService {
     return this.current;
   }
 
-  private computeSign(ts: string): string {
-    const data = this.token + ts;
+  private computeSign(ts: string, nonce: string): string {
+    const data = this.token + ts + nonce;
     const hex = crypto.createHmac('sha256', Buffer.from(this.secret, 'utf8'))
       .update(Buffer.from(data, 'utf8'))
       .digest('hex');

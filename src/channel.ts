@@ -268,28 +268,25 @@ export const switchbotPlugin = {
   },
   config: {
     // 账户管理
+    // 注意：cfg 参数是完整的 openclaw 配置对象，channel 配置在 cfg.channels.switchbot 下
     listAccountIds: (cfg: any) => {
-      const config = cfg?.channels?.switchbot || cfg;
+      const config = cfg?.channels?.switchbot;
       return config?.token ? ['default'] : [];
     },
     resolveAccount: (cfg: any, accountId?: string) => {
-      const config = cfg?.channels?.switchbot || cfg;
+      const config = cfg?.channels?.switchbot;
       if (accountId === 'default' && config?.token) {
-        return {
-          id: 'default',
-          label: 'SwitchBot Account',
-          configured: true
-        };
+        return { id: 'default', label: 'SwitchBot Account', configured: true };
       }
       return null;
     },
     defaultAccountId: (cfg: any) => {
-      const config = cfg?.channels?.switchbot || cfg;
+      const config = cfg?.channels?.switchbot;
       return config?.token ? 'default' : null;
     },
-    isConfigured: (cfg: any) => {
-      const config = cfg?.channels?.switchbot || cfg;
-      return !!(config?.token && config?.secret);
+    isConfigured: (account: any) => {
+      // 收到的是 resolveAccount 返回的账户对象
+      return !!(account?.configured);
     },
     describeAccount: (account: any, cfg: any) => {
       if (account?.id === 'default') {
@@ -342,10 +339,13 @@ export const switchbotPlugin = {
   // 网关配置
   gateway: {
     async startAccount(ctx: any) {
-      const { accountId, config, runtime } = ctx;
+      const { accountId, cfg, runtime } = ctx;
       console.log(`[SwitchBot Channel] Starting account ${accountId}...`);
 
-      const switchbotConfig = config?.channels?.switchbot || config;
+      const switchbotConfig = cfg?.channels?.switchbot;
+      if (!switchbotConfig?.token || !switchbotConfig?.secret) {
+        throw new Error('SwitchBot channel config missing token/secret');
+      }
       const channel = create(switchbotConfig, { runtime });
       await channel.start();
 
@@ -359,25 +359,27 @@ export const switchbotPlugin = {
   },
   // 状态检查
   status: {
-    collectStatusIssues: (cfg: any) => {
-      const config = cfg?.channels?.switchbot || cfg;
-      const issues = [];
-      if (!config?.token) {
-        issues.push({
-          type: 'missing-config',
-          message: 'SwitchBot API token is required'
-        });
+    // collectStatusIssues 接收的是账户快照数组 accounts.map(a => a.snapshot)
+    collectStatusIssues: (accountSnapshots: any) => {
+      const issues: any[] = [];
+      // 如果是数组，检查是否有已配置的账户
+      if (Array.isArray(accountSnapshots)) {
+        const hasConfigured = accountSnapshots.some((a: any) => a.configured);
+        if (!hasConfigured && accountSnapshots.length === 0) {
+          issues.push({
+            type: 'missing-config',
+            message: 'SwitchBot: no accounts configured (need token + secret in channels.switchbot)'
+          });
+        }
+        return issues;
       }
-      if (!config?.secret) {
-        issues.push({
-          type: 'missing-config',
-          message: 'SwitchBot API secret is required'
-        });
-      }
+      // fallback: 不应该走到这里
       return issues;
     },
-    buildChannelSummary: (cfg: any) => {
-      const config = cfg?.channels?.switchbot || cfg;
+    // buildChannelSummary 接收 { account, cfg, defaultAccountId, snapshot }
+    buildChannelSummary: (params: any) => {
+      const cfg = params?.cfg;
+      const config = cfg?.channels?.switchbot;
       const configured = !!(config?.token && config?.secret);
       return {
         configured,
@@ -386,8 +388,7 @@ export const switchbotPlugin = {
       };
     },
     probeAccount: async (params: { account: any; timeoutMs: number; cfg: any }) => {
-      const config = params.cfg?.channels?.switchbot || params.cfg;
-      // 这里可以添加账户探测逻辑
+      const config = params.cfg?.channels?.switchbot;
       return {
         reachable: true,
         authenticated: !!(config?.token && config?.secret)

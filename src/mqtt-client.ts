@@ -23,6 +23,7 @@ class MqttTlsClientManager {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private isConnecting = false;  // 添加连接状态保护
 
   constructor(credential: MqttCredential, logger: Logger) {
     this.credential = credential;
@@ -30,10 +31,22 @@ class MqttTlsClientManager {
   }
 
   async connect(): Promise<void> {
+    // 防止并发连接
+    if (this.isConnecting) {
+      this.logger.warn('Connection already in progress, waiting...');
+      // 等待当前连接完成
+      while (this.isConnecting) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
     if (this.client && this.isConnectedState) {
       this.logger.debug('MQTT client already connected');
       return;
     }
+
+    this.isConnecting = true; // 设置连接中标志
 
     // 如果有正在进行的重连定时器，清除它
     if (this.reconnectTimer) {
@@ -41,8 +54,24 @@ class MqttTlsClientManager {
       this.reconnectTimer = null;
     }
 
+    try {
+      return await this._doConnect();
+    } finally {
+      this.isConnecting = false; // 确保连接标志被重置
+    }
+  }
+
+  private async _doConnect(): Promise<void> {
+
     return new Promise((resolve, reject) => {
       try {
+        // 强制清理可能存在的旧连接
+        if (this.client && !this.client.disconnected) {
+          this.logger.info('Cleaning up existing client before new connection');
+          this.client.end(true); // 强制断开
+          this.client = null;
+        }
+
         // 解析broker URL
         const brokerUrl = new URL(this.credential.brokerUrl);
 
@@ -64,9 +93,11 @@ class MqttTlsClientManager {
         this.logger.debug(`Client cert starts with: ${this.credential.tls.certBase64.slice(0, 50)}...`);
         this.logger.debug(`Private key starts with: ${this.credential.tls.keyBase64.slice(0, 50)}...`);
 
-        // MQTT连接选项
+        // MQTT连接选项 - 使用唯一的客户端ID避免冲突
+        const uniqueClientId = `${this.credential.clientId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
         const connectOptions = {
-          clientId: this.credential.clientId,
+          clientId: uniqueClientId,  // 使用唯一ID
           clean: true,
           connectTimeout: 30000,
           reconnectPeriod: 0,         // 禁用自动重连
@@ -76,6 +107,8 @@ class MqttTlsClientManager {
           ...tlsOptions,
         };
 
+        this.logger.debug(`Using unique client ID: ${uniqueClientId}`);
+
         this.logger.debug('Connecting with TLS certificates...');
 
         this.client = mqtt.connect(this.credential.brokerUrl, connectOptions);
@@ -83,7 +116,7 @@ class MqttTlsClientManager {
         this.client.on('connect', () => {
           this.isConnectedState = true;
           this.reconnectAttempts = 0; // 重置重连计数器
-          this.logger.info(`MQTT TLS connected successfully (${this.credential.clientId})`);
+          this.logger.info(`MQTT TLS connected successfully (${uniqueClientId})`);
 
           // 自动订阅SwitchBot状态主题
           const statusTopic = this.credential.topics.status;
@@ -121,8 +154,8 @@ class MqttTlsClientManager {
 
           // 只有在非主动断开的情况下才尝试重连
           if (!this.intentionalDisconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-            const delay = Math.min(Math.pow(2, this.reconnectAttempts) * 1000, 30000); // 1s, 2s, 4s, 8s, 16s, 最大30s
-            this.reconnectAttempts++;
+            this.reconnectAttempts++; // 在这里递增计数器
+            const delay = Math.min(Math.pow(2, this.reconnectAttempts - 1) * 1000, 30000); // 修正指数计算
 
             this.logger.info(`Attempting manual reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts} after ${delay}ms`);
 
@@ -157,6 +190,7 @@ class MqttTlsClientManager {
   async disconnect(): Promise<void> {
     return new Promise((resolve) => {
       this.intentionalDisconnect = true; // 标记为主动断开
+      this.isConnecting = false; // 重置连接状态
 
       // 清除重连定时器
       if (this.reconnectTimer) {
@@ -166,7 +200,7 @@ class MqttTlsClientManager {
 
       if (this.client) {
         this.isConnectedState = false;
-        this.client.end(() => {
+        this.client.end(false, {}, () => {  // 使用正常断开而不是强制断开
           this.client = null;
           this.messageHandlers.clear();
           this.intentionalDisconnect = false; // 重置标志

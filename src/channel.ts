@@ -1,6 +1,6 @@
 import { validateConfig, SwitchBotConfig } from './config';
-import { CredentialService } from './credential';
-import { createIoTMqttClient } from './mqtt-client';
+import { CredentialService, MqttCredential } from './credential';
+import { createMqttTlsClient } from './mqtt-client';
 import { toOpenClawMessage, validateDeviceEvent } from './message-handler';
 import { SwitchBotDeviceEvent } from './types';
 import { getSwitchBotRuntime } from './runtime';
@@ -45,7 +45,7 @@ function extractSwitchBotConfig(config: any, globalConfig?: any): any {
  */
 class SwitchBotChannel {
   private credentialService: CredentialService | null = null;
-  private mqttClient: any = null;
+  private mqttClient: any = null; // 使用any暂时避免类型问题
   private config: SwitchBotConfig;
   private isStarted = false;
 
@@ -65,25 +65,27 @@ class SwitchBotChannel {
     try {
       console.log('[SwitchBot Channel] 开始启动...');
 
-      // 初始化凭证服务
+      // 初始化凭证服务 - 使用定时续期而非基于expiration的续期
       this.credentialService = new CredentialService(
         this.config.token,
         this.config.secret,
         this.config.credentialEndpoint || 'https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential',
         'openclaw-instance',
-        this.config.renewBeforeMs || 300000,
+        this.config.renewBeforeMs || 3600000, // 默认1小时续期一次
         this.onCredentialsRenewed.bind(this)
       );
 
       // 获取初始凭证
       const credentials = await this.credentialService.fetch();
-      console.log('[SwitchBot Channel] 凭证获取成功:', {
-        endpoint: credentials.iotEndpoint,
+      console.log('[SwitchBot Channel] MQTT凭证获取成功:', {
+        brokerUrl: credentials.brokerUrl,
         region: credentials.region,
-        clientId: credentials.clientId
+        clientId: credentials.clientId,
+        statusTopic: credentials.topics.status,
+        qos: credentials.qos
       });
 
-      // 创建并启动 MQTT 客户端
+      // 创建并启动 MQTT TLS 客户端
       await this.connectMQTT(credentials);
 
       this.isStarted = true;
@@ -102,9 +104,7 @@ class SwitchBotChannel {
       console.log('[SwitchBot Channel] 开始停止...');
 
       if (this.mqttClient) {
-        await new Promise<void>((resolve) => {
-          this.mqttClient.end(() => resolve());
-        });
+        await this.mqttClient.disconnect();
         this.mqttClient = null;
       }
 
@@ -121,56 +121,51 @@ class SwitchBotChannel {
   }
 
   /**
-   * 连接 MQTT 客户端
+   * 连接 MQTT TLS 客户端
    */
-  private async connectMQTT(credentials: any): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.mqttClient = createIoTMqttClient(credentials, this.config.qos || 1);
+  private async connectMQTT(credentials: MqttCredential): Promise<void> {
+    try {
+      // 创建MQTT TLS客户端管理器
+      this.mqttClient = createMqttTlsClient(
+        credentials,
+        {
+          debug: (msg) => console.debug(`[SwitchBot Channel] ${msg}`),
+          info: (msg) => console.log(`[SwitchBot Channel] ${msg}`),
+          warn: (msg) => console.warn(`[SwitchBot Channel] ${msg}`),
+          error: (msg) => console.error(`[SwitchBot Channel] ${msg}`),
+        }
+      );
 
-        this.mqttClient.on('connect', () => {
-          console.log('[SwitchBot Channel] MQTT 连接成功');
-          resolve();
-        });
+      // 订阅SwitchBot设备状态消息
+      this.mqttClient.subscribe(credentials.topics.status, (topic: string, payload: Buffer) => {
+        this.handleDeviceMessage(topic, payload);
+      });
 
-        this.mqttClient.on('message', (topic: string, payload: Buffer) => {
-          this.handleDeviceMessage(topic, payload);
-        });
-
-        this.mqttClient.on('error', (error: any) => {
-          console.error('[SwitchBot Channel] MQTT 错误:', error);
-          if (!this.isStarted) {
-            reject(error);
-          }
-        });
-
-        this.mqttClient.on('close', () => {
-          console.log('[SwitchBot Channel] MQTT 连接关闭');
-        });
-
-        // 设置连接超时
-        setTimeout(() => {
-          if (!this.mqttClient?.connected) {
-            reject(new Error('MQTT 连接超时'));
-          }
-        }, 30000);
-      } catch (error) {
-        reject(error);
-      }
-    });
+      // 连接到MQTT broker
+      await this.mqttClient.connect();
+      console.log('[SwitchBot Channel] MQTT TLS 连接成功');
+    } catch (error) {
+      console.error('[SwitchBot Channel] MQTT TLS 连接失败:', error);
+      throw error;
+    }
   }
 
   /**
    * 处理凭证续期
    */
-  private async onCredentialsRenewed(newCredentials: any): Promise<void> {
-    console.log('[SwitchBot Channel] 凭证已续期，重新连接 MQTT');
+  private async onCredentialsRenewed(newCredentials: MqttCredential): Promise<void> {
+    console.log('[SwitchBot Channel] 凭证已续期，重新连接 MQTT TLS');
 
     if (this.mqttClient) {
-      this.mqttClient.end();
+      // 使用新的updateCredentials方法
+      if (this.mqttClient.updateCredentials) {
+        await this.mqttClient.updateCredentials(newCredentials);
+      } else {
+        // 回退到重新连接
+        await this.mqttClient.disconnect();
+        await this.connectMQTT(newCredentials);
+      }
     }
-
-    await this.connectMQTT(newCredentials);
   }
 
   /**
@@ -188,7 +183,8 @@ class SwitchBotChannel {
       // 转换为 OpenClaw 消息格式
       const openClawMessage = toOpenClawMessage(topic, deviceEvent);
 
-      // 发送到 OpenClaw
+      // 发送到 OpenClaw - SwitchBot设备事件使用原有方式
+      // 这些是设备状态事件，会被OpenClaw作为系统事件处理，而不是聊天消息
       this.sendMessage(openClawMessage);
 
     } catch (error) {
@@ -198,6 +194,7 @@ class SwitchBotChannel {
 
   /**
    * 发送消息到 OpenClaw
+   * SwitchBot设备事件会被OpenClaw作为系统事件处理（不进入聊天会话）
    */
   private async sendMessage(message: any): Promise<void> {
     try {
@@ -220,7 +217,7 @@ class SwitchBotChannel {
   getStatus(): any {
     return {
       started: this.isStarted,
-      mqttConnected: this.mqttClient?.connected || false,
+      mqttConnected: this.mqttClient?.isConnected() || false,
       credentialsValid: !!this.credentialService?.getCurrent(),
       config: {
         endpoint: this.config.credentialEndpoint,
@@ -232,7 +229,7 @@ class SwitchBotChannel {
    * 健康检查
    */
   healthCheck(): boolean {
-    return this.isStarted && this.mqttClient?.connected;
+    return this.isStarted && (this.mqttClient?.isConnected() || false);
   }
 }
 
@@ -258,8 +255,8 @@ export const switchbotPlugin = {
     chatTypes: [],  // SwitchBot是IoT设备通道，不支持聊天
     media: false,   // SwitchBot不支持媒体文件
     features: {
-      inbound: true,   // 接收设备消息
-      outbound: false, // 不支持主动发送到设备
+      inbound: true,   // 接收SwitchBot设备消息
+      outbound: false, // 不支持主动发送
       threading: false,
       reactions: false,
       editing: false,
@@ -330,8 +327,8 @@ export const switchbotPlugin = {
         },
         renewBeforeMs: {
           type: 'number',
-          default: 300000,
-          description: 'Renew credentials before expiry (milliseconds)'
+          default: 3600000,
+          description: 'Renew credentials interval (milliseconds, default 1 hour)'
         }
       }
     }

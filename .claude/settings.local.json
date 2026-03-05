@@ -22,7 +22,10 @@
       "Bash(tasklist:*)",
       "Bash(findstr:*)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(tsx:*)",
+      "Bash(node:*)",
+      "Bash(npx ts-node:*)"
     ]
   }
 }

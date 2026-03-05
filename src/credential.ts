@@ -1,45 +1,51 @@
 import { z } from 'zod';
 import crypto from 'crypto';
 
+// 新的证书接口返回格式
 const CredentialResponse = z.object({
   statusCode: z.number(),
   body: z.object({
     statusCode: z.number(),
     body: z.object({
-      iotEndpoint: z.string(),
-      region: z.string(),
-      credentials: z.object({
-        accessKeyId: z.string(),
-        secretAccessKey: z.string(),
-        sessionToken: z.string(),
-        expiration: z.string().datetime(),
-      }),
-      clientId: z.string(),
-      caCertificate: z.string(),
-      topics: z.object({
-        subscribe: z.string(), // 改为字符串，不是数组
+      channels: z.object({
+        mqtt: z.object({
+          brokerUrl: z.string(),
+          region: z.string(),
+          clientId: z.string(),
+          topics: z.object({
+            status: z.string(),
+          }),
+          qos: z.number(),
+          tls: z.object({
+            enabled: z.boolean(),
+            caBase64: z.string(),
+            certBase64: z.string(),
+            keyBase64: z.string(),
+          }),
+        }),
       }),
     })
   }),
   message: z.string(),
 });
 
-export type IoTCredential = z.infer<typeof CredentialResponse>['body']['body'];
+export type MqttCredential = z.infer<typeof CredentialResponse>['body']['body']['channels']['mqtt'];
 
 export class CredentialService {
-  private current: IoTCredential | null = null;
+  private current: MqttCredential | null = null;
   private renewTimer: NodeJS.Timeout | null = null;
+  private lastFetchTime = 0;
 
   constructor(
     private token: string,
     private secret: string,
     private endpoint: string,
     private instanceId: string,
-    private renewBeforeMs: number,
-    private onRenew: (cred: IoTCredential) => void,
+    private renewIntervalMs: number, // 改为间隔，因为新接口没有expiration
+    private onRenew: (cred: MqttCredential) => void,
   ) {}
 
-  async fetch(): Promise<IoTCredential> {
+  async fetch(): Promise<MqttCredential> {
     const ts = Date.now().toString();
     const nonce = "OpenClaw"; // 固定为 OpenClaw
     const sign = this.computeSign(ts, nonce);
@@ -84,8 +90,20 @@ export class CredentialService {
       throw new Error(`SwitchBot IoT credential error (${data.body?.statusCode}): ${data.body?.message || 'unknown'}`);
     }
 
-    this.current = CredentialResponse.parse(data).body.body;
+    const parsed = CredentialResponse.parse(data);
+    this.current = parsed.body.body.channels.mqtt;
+    this.lastFetchTime = Date.now();
     this.scheduleRenewal();
+
+    console.log('[SwitchBot Credential] MQTT配置获取成功:', {
+      brokerUrl: this.current.brokerUrl,
+      clientId: this.current.clientId,
+      region: this.current.region,
+      statusTopic: this.current.topics.status,
+      qos: this.current.qos,
+      tlsEnabled: this.current.tls.enabled,
+    });
+
     return this.current;
   }
 
@@ -100,10 +118,8 @@ export class CredentialService {
   private scheduleRenewal() {
     if (this.renewTimer) clearTimeout(this.renewTimer);
 
-    if (!this.current) return;
-
-    const expiry = new Date(this.current.credentials.expiration).getTime();
-    const delay = Math.max(expiry - Date.now() - this.renewBeforeMs, 60_000);
+    // 由于新接口没有expiration，使用固定的续期间隔
+    const delay = this.renewIntervalMs;
 
     console.log(`[SwitchBot] 凭证将在 ${delay / 1000} 秒后续期`);
 
@@ -121,7 +137,7 @@ export class CredentialService {
     }, delay);
   }
 
-  getCurrent(): IoTCredential | null {
+  getCurrent(): MqttCredential | null {
     return this.current;
   }
 

@@ -40,13 +40,19 @@ class MqttTlsClientManager {
         this.logger.debug(`Client ID: ${this.credential.clientId}`);
         this.logger.debug(`Region: ${this.credential.region}`);
 
-        // 准备TLS证书
+        // 准备TLS证书 - 证书数据已经是PEM格式，不需要Base64解码
+        // 只需要确保换行符正确处理
         const tlsOptions = {
-          ca: Buffer.from(this.credential.tls.caBase64, 'base64'),
-          cert: Buffer.from(this.credential.tls.certBase64, 'base64'),
-          key: Buffer.from(this.credential.tls.keyBase64, 'base64'),
+          ca: this.credential.tls.caBase64,
+          cert: this.credential.tls.certBase64,
+          key: this.credential.tls.keyBase64,
           rejectUnauthorized: true,
         };
+
+        this.logger.debug('Using PEM certificates for TLS connection');
+        this.logger.debug(`CA cert starts with: ${this.credential.tls.caBase64.slice(0, 50)}...`);
+        this.logger.debug(`Client cert starts with: ${this.credential.tls.certBase64.slice(0, 50)}...`);
+        this.logger.debug(`Private key starts with: ${this.credential.tls.keyBase64.slice(0, 50)}...`);
 
         // MQTT连接选项
         const connectOptions = {

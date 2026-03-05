@@ -19,6 +19,10 @@ class MqttTlsClientManager {
   private logger: Logger;
   private messageHandlers: Map<string, MessageHandler[]> = new Map();
   private isConnectedState = false;
+  private intentionalDisconnect = false;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectTimer: NodeJS.Timeout | null = null;
 
   constructor(credential: MqttCredential, logger: Logger) {
     this.credential = credential;
@@ -29,6 +33,12 @@ class MqttTlsClientManager {
     if (this.client && this.isConnectedState) {
       this.logger.debug('MQTT client already connected');
       return;
+    }
+
+    // 如果有正在进行的重连定时器，清除它
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
 
     return new Promise((resolve, reject) => {
@@ -59,7 +69,9 @@ class MqttTlsClientManager {
           clientId: this.credential.clientId,
           clean: true,
           connectTimeout: 30000,
-          reconnectPeriod: 5000,
+          reconnectPeriod: 0,         // 禁用自动重连
+          keepalive: 60,              // 保持心跳检测
+          reschedulePings: true,      // 重新安排ping
           // TLS配置
           ...tlsOptions,
         };
@@ -70,6 +82,7 @@ class MqttTlsClientManager {
 
         this.client.on('connect', () => {
           this.isConnectedState = true;
+          this.reconnectAttempts = 0; // 重置重连计数器
           this.logger.info(`MQTT TLS connected successfully (${this.credential.clientId})`);
 
           // 自动订阅SwitchBot状态主题
@@ -105,10 +118,27 @@ class MqttTlsClientManager {
         this.client.on('close', () => {
           this.isConnectedState = false;
           this.logger.warn('MQTT TLS connection closed');
+
+          // 只有在非主动断开的情况下才尝试重连
+          if (!this.intentionalDisconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+            const delay = Math.min(Math.pow(2, this.reconnectAttempts) * 1000, 30000); // 1s, 2s, 4s, 8s, 16s, 最大30s
+            this.reconnectAttempts++;
+
+            this.logger.info(`Attempting manual reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts} after ${delay}ms`);
+
+            this.reconnectTimer = setTimeout(() => {
+              this.connect().catch(err => {
+                this.logger.error(`Manual reconnect attempt failed: ${err.message}`);
+              });
+            }, delay);
+          } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this.logger.error('Max reconnect attempts reached, giving up automatic reconnection');
+          }
         });
 
         this.client.on('reconnect', () => {
-          this.logger.info('MQTT TLS reconnecting...');
+          // 由于我们已禁用自动重连，这个事件不应该被触发
+          this.logger.debug('MQTT TLS reconnect event triggered (should not happen with reconnectPeriod=0)');
         });
 
         // 连接超时处理
@@ -126,15 +156,25 @@ class MqttTlsClientManager {
 
   async disconnect(): Promise<void> {
     return new Promise((resolve) => {
+      this.intentionalDisconnect = true; // 标记为主动断开
+
+      // 清除重连定时器
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+
       if (this.client) {
         this.isConnectedState = false;
         this.client.end(() => {
           this.client = null;
           this.messageHandlers.clear();
+          this.intentionalDisconnect = false; // 重置标志
           this.logger.info('MQTT TLS disconnected');
           resolve();
         });
       } else {
+        this.intentionalDisconnect = false; // 重置标志
         resolve();
       }
     });
@@ -167,14 +207,33 @@ class MqttTlsClientManager {
     return this.isConnectedState;
   }
 
+  // 重置重连状态（用于手动恢复连接）
+  resetReconnectState(): void {
+    this.reconnectAttempts = 0;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.logger.info('Reconnect state reset');
+  }
+
   // 更新凭证（用于凭证续期）
   async updateCredentials(newCredential: MqttCredential): Promise<void> {
     this.logger.info('Updating MQTT TLS credentials...');
     this.credential = newCredential;
 
     if (this.client && this.isConnectedState) {
+      this.logger.info('Disconnecting current connection to update credentials...');
       await this.disconnect();
+
+      // 等待一小段时间确保连接完全关闭
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      this.logger.info('Reconnecting with new credentials...');
       await this.connect();
+      this.logger.info('Credentials updated and reconnected successfully');
+    } else {
+      this.logger.debug('No active connection, credentials updated for next connection');
     }
   }
 

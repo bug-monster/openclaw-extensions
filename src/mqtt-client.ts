@@ -55,136 +55,130 @@ class MqttTlsClientManager {
     }
 
     try {
-      return await this._doConnect();
-    } finally {
-      this.isConnecting = false; // 确保连接标志被重置
-    }
-  }
+      return new Promise((resolve, reject) => {
+        try {
+          // 强制清理可能存在的旧连接
+          if (this.client && !this.client.disconnected) {
+            this.logger.info('Cleaning up existing client before new connection');
+            this.client.end(true); // 强制断开
+            this.client = null;
+          }
 
-  private async _doConnect(): Promise<void> {
+          this.logger.info(`Connecting to MQTT broker: ${this.credential.brokerUrl}`);
+          this.logger.debug(`Client ID: ${this.credential.clientId}`);
+          this.logger.debug(`Region: ${this.credential.region}`);
 
-    return new Promise((resolve, reject) => {
-      try {
-        // 强制清理可能存在的旧连接
-        if (this.client && !this.client.disconnected) {
-          this.logger.info('Cleaning up existing client before new connection');
-          this.client.end(true); // 强制断开
-          this.client = null;
-        }
+          // 准备TLS证书 - 证书数据已经是PEM格式，不需要Base64解码
+          // 只需要确保换行符正确处理
+          const tlsOptions = {
+            ca: this.credential.tls.caBase64,
+            cert: this.credential.tls.certBase64,
+            key: this.credential.tls.keyBase64,
+            rejectUnauthorized: true,
+          };
 
-        // 解析broker URL
-        const brokerUrl = new URL(this.credential.brokerUrl);
+          this.logger.debug('Using PEM certificates for TLS connection');
+          this.logger.debug(`CA cert starts with: ${this.credential.tls.caBase64.slice(0, 50)}...`);
+          this.logger.debug(`Client cert starts with: ${this.credential.tls.certBase64.slice(0, 50)}...`);
+          this.logger.debug(`Private key starts with: ${this.credential.tls.keyBase64.slice(0, 50)}...`);
 
-        this.logger.info(`Connecting to MQTT broker: ${this.credential.brokerUrl}`);
-        this.logger.debug(`Client ID: ${this.credential.clientId}`);
-        this.logger.debug(`Region: ${this.credential.region}`);
+          // MQTT连接选项 - 使用唯一的客户端ID避免冲突
+          const uniqueClientId = `${this.credential.clientId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-        // 准备TLS证书 - 证书数据已经是PEM格式，不需要Base64解码
-        // 只需要确保换行符正确处理
-        const tlsOptions = {
-          ca: this.credential.tls.caBase64,
-          cert: this.credential.tls.certBase64,
-          key: this.credential.tls.keyBase64,
-          rejectUnauthorized: true,
-        };
+          const connectOptions = {
+            clientId: uniqueClientId,  // 使用唯一ID
+            clean: true,
+            connectTimeout: 30000,
+            reconnectPeriod: 0,         // 禁用自动重连
+            keepalive: 60,              // 保持心跳检测
+            reschedulePings: true,      // 重新安排ping
+            // TLS配置
+            ...tlsOptions,
+          };
 
-        this.logger.debug('Using PEM certificates for TLS connection');
-        this.logger.debug(`CA cert starts with: ${this.credential.tls.caBase64.slice(0, 50)}...`);
-        this.logger.debug(`Client cert starts with: ${this.credential.tls.certBase64.slice(0, 50)}...`);
-        this.logger.debug(`Private key starts with: ${this.credential.tls.keyBase64.slice(0, 50)}...`);
+          this.logger.debug(`Using unique client ID: ${uniqueClientId}`);
+          this.logger.debug('Connecting with TLS certificates...');
 
-        // MQTT连接选项 - 使用唯一的客户端ID避免冲突
-        const uniqueClientId = `${this.credential.clientId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+          this.client = mqtt.connect(this.credential.brokerUrl, connectOptions);
 
-        const connectOptions = {
-          clientId: uniqueClientId,  // 使用唯一ID
-          clean: true,
-          connectTimeout: 30000,
-          reconnectPeriod: 0,         // 禁用自动重连
-          keepalive: 60,              // 保持心跳检测
-          reschedulePings: true,      // 重新安排ping
-          // TLS配置
-          ...tlsOptions,
-        };
+          this.client.on('connect', () => {
+            this.isConnectedState = true;
+            this.reconnectAttempts = 0; // 重置重连计数器
+            this.logger.info(`MQTT TLS connected successfully (${uniqueClientId})`);
 
-        this.logger.debug(`Using unique client ID: ${uniqueClientId}`);
+            // 自动订阅SwitchBot状态主题
+            const statusTopic = this.credential.topics.status;
+            this.client!.subscribe(statusTopic, { qos: this.credential.qos as 0 | 1 | 2 }, (err) => {
+              if (err) {
+                this.logger.error(`Failed to subscribe to status topic: ${statusTopic}`);
+              } else {
+                this.logger.info(`Subscribed to status topic: ${statusTopic}`);
+              }
+            });
 
-        this.logger.debug('Connecting with TLS certificates...');
+            resolve();
+          });
 
-        this.client = mqtt.connect(this.credential.brokerUrl, connectOptions);
+          this.client.on('message', (topic, payload, packet) => {
+            this.handleMessage(topic, payload);
+          });
 
-        this.client.on('connect', () => {
-          this.isConnectedState = true;
-          this.reconnectAttempts = 0; // 重置重连计数器
-          this.logger.info(`MQTT TLS connected successfully (${uniqueClientId})`);
+          this.client.on('error', (error) => {
+            this.isConnectedState = false;
+            this.logger.error(`MQTT TLS connection error: ${error.message}`);
+            reject(error);
+          });
 
-          // 自动订阅SwitchBot状态主题
-          const statusTopic = this.credential.topics.status;
-          this.client!.subscribe(statusTopic, { qos: this.credential.qos as 0 | 1 | 2 }, (err) => {
-            if (err) {
-              this.logger.error(`Failed to subscribe to status topic: ${statusTopic}`);
-            } else {
-              this.logger.info(`Subscribed to status topic: ${statusTopic}`);
+          this.client.on('offline', () => {
+            this.isConnectedState = false;
+            this.logger.warn('MQTT TLS offline, attempting reconnect...');
+          });
+
+          this.client.on('close', () => {
+            this.isConnectedState = false;
+            this.logger.warn('MQTT TLS connection closed');
+
+            // 只有在非主动断开的情况下才尝试重连
+            if (!this.intentionalDisconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+              this.reconnectAttempts++; // 在这里递增计数器
+              const delay = Math.min(Math.pow(2, this.reconnectAttempts - 1) * 1000, 30000); // 修正指数计算
+
+              this.logger.info(`Attempting manual reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts} after ${delay}ms`);
+
+              this.reconnectTimer = setTimeout(() => {
+                this.connect().catch(err => {
+                  this.logger.error(`Manual reconnect attempt failed: ${err.message}`);
+                });
+              }, delay);
+            } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+              this.logger.error('Max reconnect attempts reached, giving up automatic reconnection');
             }
           });
 
-          resolve();
-        });
+          this.client.on('reconnect', () => {
+            // 由于我们已禁用自动重连，这个事件不应该被触发
+            this.logger.debug('MQTT TLS reconnect event triggered (should not happen with reconnectPeriod=0)');
+          });
 
-        this.client.on('message', (topic, payload, packet) => {
-          this.handleMessage(topic, payload);
-        });
+          // 连接超时处理
+          const timeoutId = setTimeout(() => {
+            if (!this.isConnectedState) {
+              reject(new Error('MQTT TLS connection timeout'));
+            }
+          }, 30000);
 
-        this.client.on('error', (error) => {
-          this.isConnectedState = false;
-          this.logger.error(`MQTT TLS connection error: ${error.message}`);
-          if (!this.isConnectedState) {
-            reject(error);
-          }
-        });
+          // 确保在连接成功后清除超时
+          this.client.on('connect', () => {
+            clearTimeout(timeoutId);
+          });
 
-        this.client.on('offline', () => {
-          this.isConnectedState = false;
-          this.logger.warn('MQTT TLS offline, attempting reconnect...');
-        });
-
-        this.client.on('close', () => {
-          this.isConnectedState = false;
-          this.logger.warn('MQTT TLS connection closed');
-
-          // 只有在非主动断开的情况下才尝试重连
-          if (!this.intentionalDisconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++; // 在这里递增计数器
-            const delay = Math.min(Math.pow(2, this.reconnectAttempts - 1) * 1000, 30000); // 修正指数计算
-
-            this.logger.info(`Attempting manual reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts} after ${delay}ms`);
-
-            this.reconnectTimer = setTimeout(() => {
-              this.connect().catch(err => {
-                this.logger.error(`Manual reconnect attempt failed: ${err.message}`);
-              });
-            }, delay);
-          } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            this.logger.error('Max reconnect attempts reached, giving up automatic reconnection');
-          }
-        });
-
-        this.client.on('reconnect', () => {
-          // 由于我们已禁用自动重连，这个事件不应该被触发
-          this.logger.debug('MQTT TLS reconnect event triggered (should not happen with reconnectPeriod=0)');
-        });
-
-        // 连接超时处理
-        setTimeout(() => {
-          if (!this.isConnectedState) {
-            reject(new Error('MQTT TLS connection timeout'));
-          }
-        }, 30000);
-
-      } catch (error) {
-        reject(error);
-      }
-    });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    } finally {
+      this.isConnecting = false; // 确保连接标志被重置
+    }
   }
 
   async disconnect(): Promise<void> {

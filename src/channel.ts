@@ -237,12 +237,161 @@ class SwitchBotChannel {
 }
 
 // 创建插件实例的工厂函数
-export function create(config: any, context?: any): SwitchBotChannel {
+function create(config: any, context?: any): SwitchBotChannel {
   // 传递上下文给构造函数，这样可以访问全局配置
   return new SwitchBotChannel(config, context?.globalConfig || context);
 }
 
+// 按照OpenClaw channel插件标准导出
 export const switchbotPlugin = {
-  create,
-  Channel: SwitchBotChannel
+  id: "switchbot",
+  meta: {
+    id: "switchbot",
+    label: "SwitchBot",
+    selectionLabel: "SwitchBot (Smart Home)",
+    docsPath: "/channels/switchbot",
+    docsLabel: "switchbot",
+    blurb: "Real-time SwitchBot device status via AWS IoT Core MQTT",
+    aliases: ["switchbot"],
+  },
+  capabilities: {
+    chatTypes: [],  // SwitchBot是IoT设备通道，不支持聊天
+    media: false,   // SwitchBot不支持媒体文件
+    features: {
+      inbound: true,   // 接收设备消息
+      outbound: false, // 不支持主动发送到设备
+      threading: false,
+      reactions: false,
+      editing: false,
+      deletion: false,
+    }
+  },
+  config: {
+    // 账户管理
+    listAccountIds: (cfg: any) => {
+      const config = cfg?.channels?.switchbot || cfg;
+      return config?.token ? ['default'] : [];
+    },
+    resolveAccount: (cfg: any, accountId?: string) => {
+      const config = cfg?.channels?.switchbot || cfg;
+      if (accountId === 'default' && config?.token) {
+        return {
+          id: 'default',
+          label: 'SwitchBot Account',
+          configured: true
+        };
+      }
+      return null;
+    },
+    defaultAccountId: (cfg: any) => {
+      const config = cfg?.channels?.switchbot || cfg;
+      return config?.token ? 'default' : null;
+    },
+    isConfigured: (cfg: any) => {
+      const config = cfg?.channels?.switchbot || cfg;
+      return !!(config?.token && config?.secret);
+    },
+    describeAccount: (account: any, cfg: any) => {
+      if (account?.id === 'default') {
+        return {
+          accountId: 'default',
+          id: 'default',
+          label: 'SwitchBot IoT devices',
+          configured: true
+        };
+      }
+      return {
+        accountId: account?.id || 'unknown',
+        id: account?.id || 'unknown',
+        label: 'Unknown account',
+        configured: false
+      };
+    }
+  },
+  configSchema: {
+    schema: {
+      type: 'object',
+      properties: {
+        token: {
+          type: 'string',
+          description: 'SwitchBot API token from developer settings'
+        },
+        secret: {
+          type: 'string',
+          description: 'SwitchBot API secret from developer settings'
+        },
+        credentialEndpoint: {
+          type: 'string',
+          default: 'https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential',
+          description: 'SwitchBot IoT credential endpoint'
+        },
+        qos: {
+          type: 'number',
+          enum: [0, 1, 2],
+          default: 1,
+          description: 'MQTT QoS level'
+        },
+        renewBeforeMs: {
+          type: 'number',
+          default: 300000,
+          description: 'Renew credentials before expiry (milliseconds)'
+        }
+      }
+    }
+  },
+  // 网关配置
+  gateway: {
+    async startAccount(ctx: any) {
+      const { accountId, config, runtime } = ctx;
+      console.log(`[SwitchBot Channel] Starting account ${accountId}...`);
+
+      const switchbotConfig = config?.channels?.switchbot || config;
+      const channel = create(switchbotConfig, { runtime });
+      await channel.start();
+
+      return {
+        stop: async () => {
+          console.log(`[SwitchBot Channel] Stopping account ${accountId}...`);
+          await channel.stop();
+        }
+      };
+    }
+  },
+  // 状态检查
+  status: {
+    collectStatusIssues: (cfg: any) => {
+      const config = cfg?.channels?.switchbot || cfg;
+      const issues = [];
+      if (!config?.token) {
+        issues.push({
+          type: 'missing-config',
+          message: 'SwitchBot API token is required'
+        });
+      }
+      if (!config?.secret) {
+        issues.push({
+          type: 'missing-config',
+          message: 'SwitchBot API secret is required'
+        });
+      }
+      return issues;
+    },
+    buildChannelSummary: (cfg: any) => {
+      const config = cfg?.channels?.switchbot || cfg;
+      const configured = !!(config?.token && config?.secret);
+      return {
+        configured,
+        accountCount: configured ? 1 : 0,
+        status: configured ? 'ready' : 'needs-config'
+      };
+    },
+    probeAccount: async (params: { account: any; timeoutMs: number; cfg: any }) => {
+      const config = params.cfg?.channels?.switchbot || params.cfg;
+      // 这里可以添加账户探测逻辑
+      return {
+        reachable: true,
+        authenticated: !!(config?.token && config?.secret)
+      };
+    }
+  }
 };

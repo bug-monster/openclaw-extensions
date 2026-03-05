@@ -12,9 +12,10 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "baseUrl": ".",
     "paths": {
-      "openclaw/plugin-sdk": ["/usr/local/lib/node_modules/openclaw/dist/plugin-sdk/index.d.ts"],
-      "openclaw/plugin-sdk/*": ["/usr/local/lib/node_modules/openclaw/dist/plugin-sdk/*"]
+      "openclaw/plugin-sdk": ["./node_modules/openclaw/dist/plugin-sdk/index.d.ts"],
+      "openclaw/plugin-sdk/*": ["./node_modules/openclaw/dist/plugin-sdk/*"]
     }
   },
   "include": ["index.ts", "src/**/*"],

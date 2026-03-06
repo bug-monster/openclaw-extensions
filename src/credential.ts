@@ -59,12 +59,12 @@ export class CredentialService {
     };
     const body = JSON.stringify({ instanceId: this.instanceId });
 
-    // console.log('[SwitchBot Credential] Request URL:', this.endpoint);
-    // console.log('[SwitchBot Credential] Request headers:', {
-    //   ...headers,
-    //   'Authorization': headers['Authorization']?.slice(0, 20) + '...',
-    // });
-    // console.log('[SwitchBot Credential] Request body:', body);
+    console.log('[SwitchBot Credential] Request URL:', this.endpoint);
+    console.log('[SwitchBot Credential] Request headers:', {
+      ...headers,
+      'Authorization': headers['Authorization']?.slice(0, 20) + '...',
+    });
+    console.log('[SwitchBot Credential] Request body:', body);
 
     const res = await fetch(this.endpoint, {
       method: 'POST',
@@ -74,7 +74,7 @@ export class CredentialService {
 
     console.log('[SwitchBot Credential] Response status:', res.status, res.statusText);
     const rawText = await res.text();
-    // console.log('[SwitchBot Credential] Response body:', rawText.slice(0, 500));
+    console.log('[SwitchBot Credential] Response body:', rawText.slice(0, 500));
 
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -97,14 +97,14 @@ export class CredentialService {
     this.lastFetchTime = Date.now();
     this.scheduleRenewal();
 
-    // console.log('[SwitchBot Credential] MQTT configuration fetched successfully:', {
-    //   brokerUrl: this.current.brokerUrl,
-    //   clientId: this.current.clientId,
-    //   region: this.current.region,
-    //   statusTopic: this.current.topics.status,
-    //   qos: this.current.qos,
-    //   tlsEnabled: this.current.tls.enabled,
-    // });
+    console.log('[SwitchBot Credential] MQTT configuration fetched successfully:', {
+      brokerUrl: this.current.brokerUrl,
+      clientId: this.current.clientId,
+      region: this.current.region,
+      statusTopic: this.current.topics.status,
+      qos: this.current.qos,
+      tlsEnabled: this.current.tls.enabled,
+    });
 
     return this.current;
   }

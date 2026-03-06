@@ -42,7 +42,7 @@ SwitchBot Channel is an official channel plugin for the OpenClaw platform that r
 
 ```bash
 # Install plugin
-openclaw plugins install @openclaw/switchbot-channel
+openclaw plugins install @linchengyu-org/switchbot-channel
 
 # Verify installation
 openclaw plugins list
@@ -208,7 +208,7 @@ SwitchBot Channel 是 OpenClaw 平台的官方渠道插件，通过 MQTT 协议�
 
 ```bash
 # 安装插件
-openclaw plugins install @openclaw/switchbot-channel
+openclaw plugins install @linchengyu-org/switchbot-channel
 
 # 验证安装
 openclaw plugins list

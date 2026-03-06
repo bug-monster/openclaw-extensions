@@ -1,9 +1,9 @@
 import { validateConfig, SwitchBotConfig } from './config';
 import { CredentialService, MqttCredential } from './credential';
 import { createMqttTlsClient } from './mqtt-client';
-import { toOpenClawMessage, validateDeviceEvent } from './message-handler';
+import { validateDeviceEvent } from './message-handler';
+import { getDeviceStore, destroyDeviceStore } from './device-store';
 import { SwitchBotDeviceEvent } from './types';
-import { getSwitchBotRuntime } from './runtime';
 
 /**
  * 从多种配置结构中提取 SwitchBot 配置
@@ -123,6 +123,8 @@ class SwitchBotChannel {
         this.credentialService = null;
       }
 
+      destroyDeviceStore();
+
       this.isStarted = false;
       if (activeInstance === this) activeInstance = null;
       console.log('[SwitchBot Channel] 停止完成');
@@ -189,45 +191,28 @@ class SwitchBotChannel {
   }
 
   /**
-   * 处理设备消息
+   * 处理设备消息 — 存储到本地，不推送
    */
   private handleDeviceMessage(topic: string, payload: Buffer): void {
     try {
       const message = payload.toString();
       console.log('[SwitchBot Channel] 收到设备消息:', { topic, message });
 
-      // 解析和验证事件数据
       const eventData = JSON.parse(message);
       const deviceEvent = validateDeviceEvent(eventData);
 
-      // 转换为 OpenClaw 消息格式
-      const openClawMessage = toOpenClawMessage(topic, deviceEvent);
+      // 存储到本地
+      const store = getDeviceStore();
+      store.record({
+        deviceMac: deviceEvent.context.deviceMac,
+        deviceType: deviceEvent.context.deviceType,
+        timestamp: deviceEvent.context.timeOfSample || Date.now(),
+        context: deviceEvent.context,
+      });
 
-      // 发送到 OpenClaw - SwitchBot设备事件使用原有方式
-      // 这些是设备状态事件，会被OpenClaw作为系统事件处理，而不是聊天消息
-      this.sendMessage(openClawMessage);
-
+      console.log(`[SwitchBot Channel] 设备状态已存储: ${deviceEvent.context.deviceType} (${deviceEvent.context.deviceMac})`);
     } catch (error) {
       console.error('[SwitchBot Channel] 处理设备消息失败:', error);
-    }
-  }
-
-  /**
-   * 发送消息到 OpenClaw
-   * SwitchBot设备事件会被OpenClaw作为系统事件处理（不进入聊天会话）
-   */
-  private async sendMessage(message: any): Promise<void> {
-    try {
-      const runtime = getSwitchBotRuntime();
-      if (runtime?.sendMessage) {
-        await runtime.sendMessage(message);
-        console.log('[SwitchBot Channel] 消息已发送到 OpenClaw');
-      } else {
-        // 开发环境下的日志输出
-        console.log('[SwitchBot Channel] OpenClaw 消息 (dev mode):', JSON.stringify(message, null, 2));
-      }
-    } catch (error) {
-      console.error('[SwitchBot Channel] 发送消息失败:', error);
     }
   }
 
@@ -358,6 +343,8 @@ export const switchbotPlugin = {
     async startAccount(ctx: any) {
       const { accountId, cfg, runtime, abortSignal } = ctx;
       console.log(`[SwitchBot Channel] Starting account ${accountId}...`);
+      console.log(`[SwitchBot Channel] ctx keys: ${Object.keys(ctx).join(', ')}`);
+      console.log(`[SwitchBot Channel] runtime type: ${typeof runtime}, keys: ${runtime ? Object.keys(runtime).join(', ') : 'null'}`);
 
       const switchbotConfig = cfg?.channels?.switchbot;
       if (!switchbotConfig?.token || !switchbotConfig?.secret) {

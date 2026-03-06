@@ -1,31 +1,33 @@
 import { SwitchBotDeviceEvent, OpenClawMessage } from './types';
 
 export function toOpenClawMessage(topic: string, event: SwitchBotDeviceEvent): OpenClawMessage {
-  const deviceId = extractDeviceId(topic);
+  const userId = extractDeviceId(topic);
+  const deviceMac = event.context.deviceMac;
 
   return {
-    senderId: `switchbot:${deviceId}`,
+    senderId: `switchbot:${deviceMac}`,
     text: formatEventText(event),
     metadata: {
       source: 'switchbot',
-      deviceId,
+      deviceId: deviceMac,
       deviceType: event.context.deviceType,
       raw: event.context,
-      timestamp: Date.now()
+      timestamp: event.context.timeOfSample || Date.now()
     },
     routing: {
       type: 'event',
       store: true,
-      notify: shouldNotifyUser(event),
-      ttl: 3600 * 24 * 7 // 7天数据保留期
+      notify: false,
+      ttl: 3600 * 24 * 7
     }
   };
 }
 
 function extractDeviceId(topic: string): string {
-  // topic 格式: switchbot/{userId}/device/{deviceId}/status
+  // topic 格式: switchbot/{userId}/devicestatus
+  // 设备ID在payload的deviceMac中，这里返回userId
   const parts = topic.split('/');
-  return parts[3] || 'unknown';
+  return parts[1] || 'unknown';
 }
 
 function formatEventText(event: SwitchBotDeviceEvent): string {
@@ -67,9 +69,14 @@ function formatEventText(event: SwitchBotDeviceEvent): string {
     statusParts.push(`窗帘位置 ${ctx.slidePosition}%`);
   }
 
-  // 运动检测
+  // 运动/存在检测
   if (ctx.motionDetected !== undefined) {
     statusParts.push(ctx.motionDetected ? '检测到运动' : '运动停止');
+  }
+
+  // detectionState (Motion Sensor 实际格式)
+  if (ctx.detectionState !== undefined) {
+    statusParts.push(ctx.detectionState === 'DETECTED' ? '检测到运动' : '无运动');
   }
 
   // 锁状态
@@ -111,7 +118,28 @@ function getDeviceTypeName(deviceType: string): string {
     'WoMeter': '温湿度计',
     'WoPresence': '人体存在传感器',
     'WoHub2': 'Hub 2',
-    'WoIOSensor': 'IO 传感器'
+    'WoIOSensor': 'IO 传感器',
+    // 实际推送使用的英文名
+    'Motion Sensor': '运动传感器',
+    'Contact Sensor': '门窗传感器',
+    'Meter': '温湿度计',
+    'Meter Plus': '温湿度计Pro',
+    'Meter Pro': '温湿度计Pro',
+    'Curtain': '窗帘控制器',
+    'Curtain 3': '窗帘控制器3',
+    'Plug Mini (US)': '智能插座',
+    'Plug Mini (JP)': '智能插座',
+    'Smart Lock': '智能门锁',
+    'Smart Lock Pro': '智能门锁Pro',
+    'Hub 2': 'Hub 2',
+    'Hub Mini': 'Hub Mini',
+    'Bot': '机械臂',
+    'Color Bulb': '彩色灯泡',
+    'LED Strip Light': 'LED灯带',
+    'Ceiling Light': '吸顶灯',
+    'Blind Tilt': '百叶窗',
+    'Indoor Cam': '室内摄像头',
+    'Pan/Tilt Cam': '云台摄像头',
   };
 
   return typeMap[deviceType] || deviceType;
@@ -145,7 +173,7 @@ export function shouldNotifyUser(event: SwitchBotDeviceEvent): boolean {
   }
 
   // 4. 运动检测 (夜间)
-  if (ctx.motionDetected && isAfterHours()) {
+  if ((ctx.motionDetected || ctx.detectionState === 'DETECTED') && isAfterHours()) {
     return true; // 非正常时间的运动
   }
 
@@ -162,7 +190,7 @@ export function shouldNotifyUser(event: SwitchBotDeviceEvent): boolean {
 }
 
 function isSecurityDevice(deviceType: string): boolean {
-  return ['WoContact', 'WoLock', 'WoMotion'].includes(deviceType);
+  return ['WoContact', 'WoLock', 'WoMotion', 'Contact Sensor', 'Smart Lock', 'Smart Lock Pro', 'Motion Sensor'].includes(deviceType);
 }
 
 function isAfterHours(): boolean {
@@ -199,11 +227,6 @@ export function validateDeviceEvent(data: unknown): SwitchBotDeviceEvent {
 
   if (!ctx.deviceType || !ctx.deviceMac || !ctx.timeOfSample) {
     throw new Error('Missing required context fields');
-  }
-
-  // MAC 地址格式验证
-  if (!/^[0-9A-Fa-f:]{17}$/.test(ctx.deviceMac)) {
-    throw new Error(`Invalid device MAC format: ${ctx.deviceMac}`);
   }
 
   return event as SwitchBotDeviceEvent;

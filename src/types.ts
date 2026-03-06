@@ -44,6 +44,7 @@ export interface SwitchBotDeviceEvent {
 
     // 运动传感器
     motionDetected?: boolean;
+    detectionState?: 'DETECTED' | 'NOT_DETECTED';
 
     // 锁
     lockState?: 'locked' | 'unlocked' | 'jammed';

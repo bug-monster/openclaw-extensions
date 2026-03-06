@@ -1,68 +1,68 @@
-/** SwitchBot 推送的设备状态事件 — 统一格式 */
+/** SwitchBot device status event format — unified format */
 export interface SwitchBotDeviceEvent {
-  /** 事件类型 */
+  /** Event type */
   eventType: 'changeReport';
 
-  /** 事件版本 */
+  /** Event version */
   eventVersion: '1';
 
-  /** 事件上下文 */
+  /** Event context */
   context: {
-    /** 设备类型标识 (如 "WoMeterPro", "WoContact", "WoCurtain3" 等) */
+    /** Device type identifier (e.g. "WoMeterPro", "WoContact", "WoCurtain3" etc.) */
     deviceType: string;
 
-    /** 设备 MAC */
+    /** Device MAC address */
     deviceMac: string;
 
-    /** 采样时间戳 (ms) */
+    /** Sample timestamp (ms) */
     timeOfSample: number;
 
-    /** === 通用状态字段 (各设备按需携带) === */
+    /** === Common status fields (devices carry as needed) === */
 
-    // 温湿度类
+    // Temperature and humidity
     temperature?: number;        // °C
     humidity?: number;           // %
 
-    // 开关类
+    // Power switch
     power?: 'on' | 'off';
 
-    // 门窗传感器
+    // Contact sensor
     openState?: 'open' | 'close' | 'timeOutNotClose';
     brightness?: 'bright' | 'dim';
 
-    // 窗帘
+    // Curtain
     slidePosition?: number;      // 0-100
     calibrate?: boolean;
 
-    // 灯带/灯泡
+    // LED strip/bulb
     color?: string;              // "255:100:50" (R:G:B)
-    colorTemperature?: number;   // 色温
+    colorTemperature?: number;   // Color temperature
     brightnessLevel?: number;    // 1-100
 
-    // 电量
+    // Battery
     battery?: number;            // 0-100
 
-    // 运动传感器
+    // Motion sensor
     motionDetected?: boolean;
     detectionState?: 'DETECTED' | 'NOT_DETECTED';
 
-    // 锁
+    // Lock
     lockState?: 'locked' | 'unlocked' | 'jammed';
     doorState?: 'open' | 'closed';
 
-    // 气象站
+    // Weather station
     pressure?: number;           // hPa
     uvIndex?: number;
     windSpeed?: number;          // m/s
-    windDirection?: number;      // 度
+    windDirection?: number;      // degrees
     rainRate?: number;           // mm/h
 
-    /** 兜底: 未列出的字段 */
+    /** Fallback: unlisted fields */
     [key: string]: unknown;
   };
 }
 
-/** OpenClaw 消息格式 */
+/** OpenClaw message format */
 export interface OpenClawMessage {
   senderId: string;
   text: string;
@@ -81,7 +81,7 @@ export interface OpenClawMessage {
   };
 }
 
-/** 性能监控指标 */
+/** Performance metrics */
 export interface PerformanceMetrics {
   messagesReceived: number;
   messagesProcessed: number;
@@ -94,7 +94,7 @@ export interface PerformanceMetrics {
   }>;
 }
 
-/** Gateway API 检测结果 */
+/** Gateway API detection result */
 export interface ApiDetectionResult {
   availableApis: string[];
   preferredApi: string | null;
@@ -106,14 +106,14 @@ export interface ApiDetectionResult {
   };
 }
 
-/** OpenClaw 运行时接口 */
+/** OpenClaw runtime interface */
 export interface OpenClawRuntime {
   sendMessage?: (message: any) => Promise<void>;
   log?: (level: string, message: string, meta?: any) => void;
   config?: any;
 }
 
-/** SwitchBot 插件模块接口 */
+/** SwitchBot plugin module interface */
 export interface SwitchbotPluginModule {
   id: string;
   name: string;

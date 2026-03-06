@@ -3,7 +3,7 @@ import type { OpenClawRuntime } from './types';
 let switchbotRuntime: OpenClawRuntime | null = null;
 
 /**
- * 设置 SwitchBot 运行时
+ * Set SwitchBot runtime
  */
 export function setSwitchBotRuntime(runtime: OpenClawRuntime): void {
   switchbotRuntime = runtime;
@@ -11,7 +11,7 @@ export function setSwitchBotRuntime(runtime: OpenClawRuntime): void {
 }
 
 /**
- * 获取 SwitchBot 运行时
+ * Get SwitchBot runtime
  */
 export function getSwitchBotRuntime(): OpenClawRuntime | null {
   return switchbotRuntime;

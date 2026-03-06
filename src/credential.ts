@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import crypto from 'crypto';
 
-// 新的证书接口返回格式
+// New credential interface response format
 const CredentialResponse = z.object({
   statusCode: z.number(),
   body: z.object({
@@ -41,13 +41,13 @@ export class CredentialService {
     private secret: string,
     private endpoint: string,
     private instanceId: string,
-    private renewIntervalMs: number, // 改为间隔，因为新接口没有expiration
+    private renewIntervalMs: number, // Changed to interval, since new interface doesn't have expiration
     private onRenew: (cred: MqttCredential) => void,
   ) {}
 
   async fetch(): Promise<MqttCredential> {
     const ts = Date.now().toString();
-    const nonce = "OpenClaw"; // 固定为 OpenClaw
+    const nonce = "OpenClaw"; // Fixed to OpenClaw
     const sign = this.computeSign(ts, nonce);
 
     const headers: Record<string, any> = {
@@ -85,7 +85,7 @@ export class CredentialService {
       throw new Error(`Credential fetch failed: ${data.message}`);
     }
 
-    // API 响应格式：{ statusCode, body: { channels: { mqtt } } }
+    // API response format: { statusCode, body: { channels: { mqtt } } }
     const outerBody = data.body;
     const mqttConfig = outerBody?.channels?.mqtt;
 
@@ -97,7 +97,7 @@ export class CredentialService {
     this.lastFetchTime = Date.now();
     this.scheduleRenewal();
 
-    console.log('[SwitchBot Credential] MQTT配置获取成功:', {
+    console.log('[SwitchBot Credential] MQTT configuration fetched successfully:', {
       brokerUrl: this.current.brokerUrl,
       clientId: this.current.clientId,
       region: this.current.region,
@@ -120,20 +120,20 @@ export class CredentialService {
   private scheduleRenewal() {
     if (this.renewTimer) clearTimeout(this.renewTimer);
 
-    // 由于新接口没有expiration，使用固定的续期间隔
+    // Since new interface doesn't have expiration, use fixed renewal interval
     const delay = this.renewIntervalMs;
 
-    console.log(`[SwitchBot] 凭证将在 ${delay / 1000} 秒后续期`);
+    console.log(`[SwitchBot] Credentials will be renewed in ${delay / 1000} seconds`);
 
     this.renewTimer = setTimeout(async () => {
       try {
-        console.log('[SwitchBot] 开始续期凭证...');
+        console.log('[SwitchBot] Starting credential renewal...');
         const cred = await this.fetch();
         this.onRenew(cred);
-        console.log('[SwitchBot] 凭证续期成功');
+        console.log('[SwitchBot] Credential renewal successful');
       } catch (e) {
-        console.error('[SwitchBot] 凭证续期失败:', e);
-        // 续期失败，30s 后重试
+        console.error('[SwitchBot] Credential renewal failed:', e);
+        // Renewal failed, retry in 30s
         this.renewTimer = setTimeout(() => this.scheduleRenewal(), 30_000);
       }
     }, delay);

@@ -24,8 +24,8 @@ export function toOpenClawMessage(topic: string, event: SwitchBotDeviceEvent): O
 }
 
 function extractDeviceId(topic: string): string {
-  // topic 格式: switchbot/{userId}/devicestatus
-  // 设备ID在payload的deviceMac中，这里返回userId
+  // topic format: switchbot/{userId}/devicestatus
+  // Device ID is in payload deviceMac, here returns userId
   const parts = topic.split('/');
   return parts[1] || 'unknown';
 }
@@ -36,71 +36,71 @@ function formatEventText(event: SwitchBotDeviceEvent): string {
 
   const statusParts: string[] = [];
 
-  // 温湿度
+  // Temperature and humidity
   if (ctx.temperature !== undefined) {
-    statusParts.push(`温度 ${ctx.temperature}°C`);
+    statusParts.push(`Temperature ${ctx.temperature}°C`);
   }
   if (ctx.humidity !== undefined) {
-    statusParts.push(`湿度 ${ctx.humidity}%`);
+    statusParts.push(`Humidity ${ctx.humidity}%`);
   }
 
-  // 开关状态
+  // Power status
   if (ctx.power !== undefined) {
-    statusParts.push(`电源${ctx.power === 'on' ? '开启' : '关闭'}`);
+    statusParts.push(`Power ${ctx.power === 'on' ? 'On' : 'Off'}`);
   }
 
-  // 门窗状态
+  // Door/window status
   if (ctx.openState !== undefined) {
     const stateMap = {
-      'open': '已打开',
-      'close': '已关闭',
-      'timeOutNotClose': '超时未关闭'
+      'open': 'Open',
+      'close': 'Closed',
+      'timeOutNotClose': 'Timeout Not Closed'
     };
-    statusParts.push(`门窗${stateMap[ctx.openState] || ctx.openState}`);
+    statusParts.push(`Door/Window ${stateMap[ctx.openState] || ctx.openState}`);
   }
 
-  // 电量
+  // Battery
   if (ctx.battery !== undefined) {
-    statusParts.push(`电量 ${ctx.battery}%`);
+    statusParts.push(`Battery ${ctx.battery}%`);
   }
 
-  // 窗帘位置
+  // Curtain position
   if (ctx.slidePosition !== undefined) {
-    statusParts.push(`窗帘位置 ${ctx.slidePosition}%`);
+    statusParts.push(`Curtain Position ${ctx.slidePosition}%`);
   }
 
-  // 运动/存在检测
+  // Motion/presence detection
   if (ctx.motionDetected !== undefined) {
-    statusParts.push(ctx.motionDetected ? '检测到运动' : '运动停止');
+    statusParts.push(ctx.motionDetected ? 'Motion Detected' : 'Motion Stopped');
   }
 
-  // detectionState (Motion Sensor 实际格式)
+  // detectionState (Motion Sensor actual format)
   if (ctx.detectionState !== undefined) {
-    statusParts.push(ctx.detectionState === 'DETECTED' ? '检测到运动' : '无运动');
+    statusParts.push(ctx.detectionState === 'DETECTED' ? 'Motion Detected' : 'No Motion');
   }
 
-  // 锁状态
+  // Lock status
   if (ctx.lockState !== undefined) {
     const lockMap = {
-      'locked': '已锁定',
-      'unlocked': '已解锁',
-      'jammed': '卡住'
+      'locked': 'Locked',
+      'unlocked': 'Unlocked',
+      'jammed': 'Jammed'
     };
-    statusParts.push(`门锁${lockMap[ctx.lockState] || ctx.lockState}`);
+    statusParts.push(`Door Lock ${lockMap[ctx.lockState] || ctx.lockState}`);
   }
 
-  // 亮度
+  // Brightness
   if (ctx.brightness !== undefined) {
-    statusParts.push(`亮度${ctx.brightness === 'bright' ? '明亮' : '昏暗'}`);
+    statusParts.push(`Brightness ${ctx.brightness === 'bright' ? 'Bright' : 'Dim'}`);
   }
 
-  // 灯光
+  // Light brightness level
   if (ctx.brightnessLevel !== undefined) {
-    statusParts.push(`亮度 ${ctx.brightnessLevel}%`);
+    statusParts.push(`Brightness ${ctx.brightnessLevel}%`);
   }
 
   if (statusParts.length === 0) {
-    statusParts.push('状态已更新');
+    statusParts.push('Status Updated');
   }
 
   return `📱 ${deviceType}: ${statusParts.join(', ')}`;
@@ -108,102 +108,44 @@ function formatEventText(event: SwitchBotDeviceEvent): string {
 
 function getDeviceTypeName(deviceType: string): string {
   const typeMap: Record<string, string> = {
-    'WoContact': '门窗传感器',
-    'WoMeterPro': '温湿度计',
-    'WoCurtain3': '窗帘控制器',
-    'WoPlug': '智能插座',
-    'WoBulb': '智能灯泡',
-    'WoLock': '智能门锁',
-    'WoMotion': '运动传感器',
-    'WoMeter': '温湿度计',
-    'WoPresence': '人体存在传感器',
+    'WoContact': 'Contact Sensor',
+    'WoMeterPro': 'Meter Pro',
+    'WoCurtain3': 'Curtain Controller',
+    'WoPlug': 'Smart Plug',
+    'WoBulb': 'Smart Bulb',
+    'WoLock': 'Smart Lock',
+    'WoMotion': 'Motion Sensor',
+    'WoMeter': 'Meter',
+    'WoPresence': 'Presence Sensor',
     'WoHub2': 'Hub 2',
-    'WoIOSensor': 'IO 传感器',
-    // 实际推送使用的英文名
-    'Motion Sensor': '运动传感器',
-    'Contact Sensor': '门窗传感器',
-    'Meter': '温湿度计',
-    'Meter Plus': '温湿度计Pro',
-    'Meter Pro': '温湿度计Pro',
-    'Curtain': '窗帘控制器',
-    'Curtain 3': '窗帘控制器3',
-    'Plug Mini (US)': '智能插座',
-    'Plug Mini (JP)': '智能插座',
-    'Smart Lock': '智能门锁',
-    'Smart Lock Pro': '智能门锁Pro',
+    'WoIOSensor': 'IO Sensor',
+    // English names used in actual push notifications
+    'Motion Sensor': 'Motion Sensor',
+    'Contact Sensor': 'Contact Sensor',
+    'Meter': 'Meter',
+    'Meter Plus': 'Meter Plus',
+    'Meter Pro': 'Meter Pro',
+    'Curtain': 'Curtain',
+    'Curtain 3': 'Curtain 3',
+    'Plug Mini (US)': 'Smart Plug',
+    'Plug Mini (JP)': 'Smart Plug',
+    'Smart Lock': 'Smart Lock',
+    'Smart Lock Pro': 'Smart Lock Pro',
     'Hub 2': 'Hub 2',
     'Hub Mini': 'Hub Mini',
-    'Bot': '机械臂',
-    'Color Bulb': '彩色灯泡',
-    'LED Strip Light': 'LED灯带',
-    'Ceiling Light': '吸顶灯',
-    'Blind Tilt': '百叶窗',
-    'Indoor Cam': '室内摄像头',
-    'Pan/Tilt Cam': '云台摄像头',
+    'Bot': 'Bot',
+    'Color Bulb': 'Color Bulb',
+    'LED Strip Light': 'LED Strip Light',
+    'Ceiling Light': 'Ceiling Light',
+    'Blind Tilt': 'Blind Tilt',
+    'Indoor Cam': 'Indoor Cam',
+    'Pan/Tilt Cam': 'Pan/Tilt Cam',
   };
 
   return typeMap[deviceType] || deviceType;
 }
 
-// 智能过滤：只有重要事件才通知用户
-export function shouldNotifyUser(event: SwitchBotDeviceEvent): boolean {
-  const ctx = event.context;
-
-  // 1. 安全相关事件
-  if (ctx.openState === 'open' && isSecurityDevice(ctx.deviceType)) {
-    return true; // 门窗传感器异常开启
-  }
-
-  if (ctx.openState === 'timeOutNotClose') {
-    return true; // 超时未关闭
-  }
-
-  // 2. 环境异常
-  if (ctx.temperature && (ctx.temperature > 35 || ctx.temperature < 5)) {
-    return true; // 极端温度
-  }
-
-  if (ctx.humidity && (ctx.humidity > 85 || ctx.humidity < 20)) {
-    return true; // 极端湿度
-  }
-
-  // 3. 设备故障
-  if (ctx.battery && ctx.battery < 10) {
-    return true; // 电量过低
-  }
-
-  // 4. 运动检测 (夜间)
-  if ((ctx.motionDetected || ctx.detectionState === 'DETECTED') && isAfterHours()) {
-    return true; // 非正常时间的运动
-  }
-
-  // 5. 门锁异常
-  if (ctx.lockState === 'jammed') {
-    return true; // 门锁卡住
-  }
-
-  if (ctx.lockState === 'unlocked' && isSecurityHours()) {
-    return true; // 安全时间内解锁
-  }
-
-  return false; // 其他情况不主动通知
-}
-
-function isSecurityDevice(deviceType: string): boolean {
-  return ['WoContact', 'WoLock', 'WoMotion', 'Contact Sensor', 'Smart Lock', 'Smart Lock Pro', 'Motion Sensor'].includes(deviceType);
-}
-
-function isAfterHours(): boolean {
-  const hour = new Date().getHours();
-  return hour >= 22 || hour <= 6; // 晚10点到早6点
-}
-
-function isSecurityHours(): boolean {
-  const hour = new Date().getHours();
-  return hour >= 23 || hour <= 5; // 晚11点到早5点
-}
-
-// 验证设备事件格式
+// Validate device event format
 export function validateDeviceEvent(data: unknown): SwitchBotDeviceEvent {
   if (!data || typeof data !== 'object') {
     throw new Error('Invalid event data: not an object');

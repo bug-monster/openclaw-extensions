@@ -9,8 +9,8 @@ export interface DeviceStatusRecord {
 }
 
 /**
- * 简单的本地 JSON 文件存储
- * 每个设备保留最新状态 + 最近 N 条历史
+ * Simple local JSON file storage
+ * Each device retains latest status + recent N history entries
  */
 export class DeviceStore {
   private storePath: string;
@@ -18,7 +18,7 @@ export class DeviceStore {
   private historyPath: string;
   private maxHistoryPerDevice: number;
 
-  // 内存缓存
+  // Memory cache
   private latest: Map<string, DeviceStatusRecord> = new Map();
   private history: Map<string, DeviceStatusRecord[]> = new Map();
   private dirty = false;
@@ -30,35 +30,35 @@ export class DeviceStore {
     this.historyPath = path.join(this.storePath, 'history.json');
     this.maxHistoryPerDevice = maxHistoryPerDevice;
 
-    // 确保目录存在
+    // Ensure directory exists
     fs.mkdirSync(this.storePath, { recursive: true });
 
-    // 加载已有数据
+    // Load existing data
     this.load();
 
-    // 定时刷盘（每 10 秒）
+    // Periodic flush to disk (every 10 seconds)
     this.flushTimer = setInterval(() => {
       if (this.dirty) this.flush();
     }, 10000);
   }
 
   /**
-   * 记录设备状态
+   * Record device status
    */
   record(event: DeviceStatusRecord): void {
     const key = event.deviceMac;
 
-    // 更新最新状态
+    // Update latest status
     this.latest.set(key, event);
 
-    // 追加历史
+    // Append to history
     if (!this.history.has(key)) {
       this.history.set(key, []);
     }
     const hist = this.history.get(key)!;
     hist.push(event);
 
-    // 裁剪历史
+    // Trim history
     if (hist.length > this.maxHistoryPerDevice) {
       hist.splice(0, hist.length - this.maxHistoryPerDevice);
     }
@@ -67,21 +67,21 @@ export class DeviceStore {
   }
 
   /**
-   * 获取设备最新状态
+   * Get device latest status
    */
   getLatest(deviceMac: string): DeviceStatusRecord | null {
     return this.latest.get(deviceMac) || null;
   }
 
   /**
-   * 获取所有设备最新状态
+   * Get all devices latest status
    */
   getAllLatest(): DeviceStatusRecord[] {
     return Array.from(this.latest.values());
   }
 
   /**
-   * 获取设备历史记录
+   * Get device history records
    */
   getHistory(deviceMac: string, limit = 20): DeviceStatusRecord[] {
     const hist = this.history.get(deviceMac) || [];
@@ -89,7 +89,7 @@ export class DeviceStore {
   }
 
   /**
-   * 按设备类型查询
+   * Query by device type
    */
   getByType(deviceType: string): DeviceStatusRecord[] {
     return Array.from(this.latest.values()).filter(
@@ -98,7 +98,7 @@ export class DeviceStore {
   }
 
   /**
-   * 列出所有已知设备
+   * List all known devices
    */
   listDevices(): Array<{ deviceMac: string; deviceType: string; lastSeen: number }> {
     return Array.from(this.latest.values()).map(r => ({
@@ -109,36 +109,36 @@ export class DeviceStore {
   }
 
   /**
-   * 导出摘要（供 OpenClaw agent 查询）
+   * Export summary (for OpenClaw agent queries)
    */
   getSummary(): string {
     const devices = this.listDevices();
-    if (devices.length === 0) return '暂无设备数据';
+    if (devices.length === 0) return 'No device data available';
 
     const lines = devices.map(d => {
       const record = this.latest.get(d.deviceMac)!;
       const ctx = record.context;
       const age = Math.round((Date.now() - d.lastSeen) / 1000);
-      const ageStr = age < 60 ? `${age}秒前` : age < 3600 ? `${Math.round(age / 60)}分钟前` : `${Math.round(age / 3600)}小时前`;
+      const ageStr = age < 60 ? `${age}s ago` : age < 3600 ? `${Math.round(age / 60)}min ago` : `${Math.round(age / 3600)}h ago`;
 
       const parts: string[] = [];
-      if (ctx.temperature !== undefined) parts.push(`温度${ctx.temperature}°C`);
-      if (ctx.humidity !== undefined) parts.push(`湿度${ctx.humidity}%`);
-      if (ctx.battery !== undefined) parts.push(`电量${ctx.battery}%`);
-      if (ctx.detectionState !== undefined) parts.push(ctx.detectionState === 'DETECTED' ? '有运动' : '无运动');
-      if (ctx.power !== undefined) parts.push(ctx.power === 'on' ? '开启' : '关闭');
-      if (ctx.openState !== undefined) parts.push(ctx.openState === 'open' ? '已打开' : '已关闭');
+      if (ctx.temperature !== undefined) parts.push(`temp ${ctx.temperature}°C`);
+      if (ctx.humidity !== undefined) parts.push(`humidity ${ctx.humidity}%`);
+      if (ctx.battery !== undefined) parts.push(`battery ${ctx.battery}%`);
+      if (ctx.detectionState !== undefined) parts.push(ctx.detectionState === 'DETECTED' ? 'motion detected' : 'no motion');
+      if (ctx.power !== undefined) parts.push(ctx.power === 'on' ? 'on' : 'off');
+      if (ctx.openState !== undefined) parts.push(ctx.openState === 'open' ? 'open' : 'closed');
       if (ctx.lockState !== undefined) parts.push(`${ctx.lockState}`);
-      if (ctx.slidePosition !== undefined) parts.push(`窗帘${ctx.slidePosition}%`);
+      if (ctx.slidePosition !== undefined) parts.push(`curtain ${ctx.slidePosition}%`);
 
-      return `- ${d.deviceType} (${d.deviceMac}): ${parts.join(', ') || '状态已更新'} [${ageStr}]`;
+      return `- ${d.deviceType} (${d.deviceMac}): ${parts.join(', ') || 'status updated'} [${ageStr}]`;
     });
 
-    return `SwitchBot 设备状态 (${devices.length} 台设备):\n${lines.join('\n')}`;
+    return `SwitchBot device status (${devices.length} devices):\n${lines.join('\n')}`;
   }
 
   /**
-   * 刷盘
+   * Flush to disk
    */
   flush(): void {
     try {
@@ -157,7 +157,7 @@ export class DeviceStore {
   }
 
   /**
-   * 加载
+   * Load from disk
    */
   private load(): void {
     try {
@@ -180,7 +180,7 @@ export class DeviceStore {
   }
 
   /**
-   * 销毁
+   * Destroy
    */
   destroy(): void {
     if (this.flushTimer) {
@@ -191,7 +191,7 @@ export class DeviceStore {
   }
 }
 
-// 全局单例
+// Global singleton
 let store: DeviceStore | null = null;
 
 export function getDeviceStore(): DeviceStore {

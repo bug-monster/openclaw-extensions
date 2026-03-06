@@ -6,45 +6,45 @@ import { getDeviceStore, destroyDeviceStore } from './device-store';
 import { SwitchBotDeviceEvent } from './types';
 
 /**
- * 从多种配置结构中提取 SwitchBot 配置
+ * Extract SwitchBot configuration from various configuration structures
  */
 function extractSwitchBotConfig(config: any, globalConfig?: any): any {
-  // 优先级顺序：
+  // Priority order:
   // 1. globalConfig.channels.switchbot
   // 2. config.channels.switchbot
-  // 3. config (直接配置)
+  // 3. config (direct configuration)
 
   if (globalConfig?.channels?.switchbot) {
-    console.log('[SwitchBot Channel] 从全局配置 channels.switchbot 读取配置');
+    console.log('[SwitchBot Channel] Reading config from global config channels.switchbot');
     return globalConfig.channels.switchbot;
   }
 
   if (config?.channels?.switchbot) {
-    console.log('[SwitchBot Channel] 从配置 channels.switchbot 读取配置');
+    console.log('[SwitchBot Channel] Reading config from channels.switchbot');
     return config.channels.switchbot;
   }
 
   if (config?.token && config?.secret) {
-    console.log('[SwitchBot Channel] 从直接配置读取');
+    console.log('[SwitchBot Channel] Reading from direct config');
     return config;
   }
 
-  // 最后尝试：可能配置在其他地方
+  // Last attempt: config might be elsewhere
   if (typeof globalThis !== 'undefined' && (globalThis as any).openclaw?.config?.channels?.switchbot) {
-    console.log('[SwitchBot Channel] 从全局 openclaw.config.channels.switchbot 读取配置');
+    console.log('[SwitchBot Channel] Reading config from global openclaw.config.channels.switchbot');
     return (globalThis as any).openclaw.config.channels.switchbot;
   }
 
-  console.log('[SwitchBot Channel] 使用默认配置结构，配置对象:', config);
+  console.log('[SwitchBot Channel] Using default config structure, config object:', config);
   return config;
 }
 
-// 模块级单例：防止 OpenClaw auto-restart 创建多个 MQTT 连接
+// Module-level singleton: prevent OpenClaw auto-restart from creating multiple MQTT connections
 let activeInstance: SwitchBotChannel | null = null;
 
 /**
  * SwitchBot Channel Plugin for OpenClaw
- * 通过 AWS IoT Core MQTT 实时接收 SwitchBot 设备状态变化
+ * Receive real-time SwitchBot device status changes via AWS IoT Core MQTT
  */
 class SwitchBotChannel {
   private credentialService: CredentialService | null = null;
@@ -58,36 +58,36 @@ class SwitchBotChannel {
   }
 
   /**
-   * 启动渠道连接
+   * Start channel connection
    */
   async start(): Promise<void> {
     if (this.isStarted) {
       return;
     }
 
-    // 单例保护：如果已有活跃实例，先停掉它
+    // Singleton protection: stop old instance if exists
     if (activeInstance && activeInstance !== this) {
-      console.log('[SwitchBot Channel] 检测到已有活跃实例，先停止旧实例...');
+      console.log('[SwitchBot Channel] Detected existing active instance, stopping old instance...');
       await activeInstance.stop();
     }
     activeInstance = this;
 
     try {
-      console.log('[SwitchBot Channel] 开始启动...');
+      console.log('[SwitchBot Channel] Starting...');
 
-      // 初始化凭证服务 - 使用定时续期而非基于expiration的续期
+      // Initialize credential service - use timed renewal instead of expiration-based renewal
       this.credentialService = new CredentialService(
         this.config.token,
         this.config.secret,
         this.config.credentialEndpoint || 'https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential',
         'openclaw-instance',
-        this.config.renewBeforeMs || 3600000, // 默认1小时续期一次
+        this.config.renewBeforeMs || 3600000, // Default 1 hour renewal interval
         this.onCredentialsRenewed.bind(this)
       );
 
-      // 获取初始凭证
+      // Get initial credentials
       const credentials = await this.credentialService.fetch();
-      console.log('[SwitchBot Channel] MQTT凭证获取成功:', {
+      console.log('[SwitchBot Channel] MQTT credentials fetched successfully:', {
         brokerUrl: credentials.brokerUrl,
         region: credentials.region,
         clientId: credentials.clientId,
@@ -95,23 +95,23 @@ class SwitchBotChannel {
         qos: credentials.qos
       });
 
-      // 创建并启动 MQTT TLS 客户端
+      // Create and start MQTT TLS client
       await this.connectMQTT(credentials);
 
       this.isStarted = true;
-      console.log('[SwitchBot Channel] 启动成功');
+      console.log('[SwitchBot Channel] Started successfully');
     } catch (error) {
-      console.error('[SwitchBot Channel] 启动失败:', error);
+      console.error('[SwitchBot Channel] Failed to start:', error);
       throw error;
     }
   }
 
   /**
-   * 停止渠道连接
+   * Stop channel connection
    */
   async stop(): Promise<void> {
     try {
-      console.log('[SwitchBot Channel] 开始停止...');
+      console.log('[SwitchBot Channel] Stopping...');
 
       if (this.mqttClient) {
         await this.mqttClient.disconnect();
@@ -127,27 +127,27 @@ class SwitchBotChannel {
 
       this.isStarted = false;
       if (activeInstance === this) activeInstance = null;
-      console.log('[SwitchBot Channel] 停止完成');
+      console.log('[SwitchBot Channel] Stop completed');
     } catch (error) {
-      console.error('[SwitchBot Channel] 停止失败:', error);
+      console.error('[SwitchBot Channel] Failed to stop:', error);
     }
   }
 
   /**
-   * 连接 MQTT TLS 客户端（单例：先销毁旧客户端再创建新的）
+   * Connect MQTT TLS client (singleton: destroy old client before creating new one)
    */
   private async connectMQTT(credentials: MqttCredential): Promise<void> {
     try {
-      // 先彻底销毁旧客户端，防止 clientId 冲突
+      // Completely destroy old client to prevent clientId conflicts
       if (this.mqttClient) {
-        console.log('[SwitchBot Channel] 销毁旧 MQTT 客户端...');
+        console.log('[SwitchBot Channel] Destroying old MQTT client...');
         try { await this.mqttClient.disconnect(); } catch (_) {}
         this.mqttClient = null;
-        // 等待 TCP 完全释放
+        // Wait for TCP to be fully released
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // 创建新的 MQTT TLS 客户端管理器
+      // Create new MQTT TLS client manager
       this.mqttClient = createMqttTlsClient(
         credentials,
         {
@@ -158,32 +158,32 @@ class SwitchBotChannel {
         }
       );
 
-      // 订阅SwitchBot设备状态消息
+      // Subscribe to SwitchBot device status messages
       this.mqttClient.subscribe(credentials.topics.status, (topic: string, payload: Buffer) => {
         this.handleDeviceMessage(topic, payload);
       });
 
-      // 连接到MQTT broker
+      // Connect to MQTT broker
       await this.mqttClient.connect();
-      console.log('[SwitchBot Channel] MQTT TLS 连接成功');
+      console.log('[SwitchBot Channel] MQTT TLS connection successful');
     } catch (error) {
-      console.error('[SwitchBot Channel] MQTT TLS 连接失败:', error);
+      console.error('[SwitchBot Channel] MQTT TLS connection failed:', error);
       throw error;
     }
   }
 
   /**
-   * 处理凭证续期
+   * Handle credential renewal
    */
   private async onCredentialsRenewed(newCredentials: MqttCredential): Promise<void> {
-    console.log('[SwitchBot Channel] 凭证已续期，重新连接 MQTT TLS');
+    console.log('[SwitchBot Channel] Credentials renewed, reconnecting MQTT TLS');
 
     if (this.mqttClient) {
-      // 使用新的updateCredentials方法
+      // Use new updateCredentials method
       if (this.mqttClient.updateCredentials) {
         await this.mqttClient.updateCredentials(newCredentials);
       } else {
-        // 回退到重新连接
+        // Fallback to reconnection
         await this.mqttClient.disconnect();
         await this.connectMQTT(newCredentials);
       }
@@ -191,17 +191,17 @@ class SwitchBotChannel {
   }
 
   /**
-   * 处理设备消息 — 存储到本地，不推送
+   * Handle device message — store locally, don't push
    */
   private handleDeviceMessage(topic: string, payload: Buffer): void {
     try {
       const message = payload.toString();
-      console.log('[SwitchBot Channel] 收到设备消息:', { topic, message });
+      console.log('[SwitchBot Channel] Received device message:', { topic, message });
 
       const eventData = JSON.parse(message);
       const deviceEvent = validateDeviceEvent(eventData);
 
-      // 存储到本地
+      // Store locally
       const store = getDeviceStore();
       store.record({
         deviceMac: deviceEvent.context.deviceMac,
@@ -210,14 +210,14 @@ class SwitchBotChannel {
         context: deviceEvent.context,
       });
 
-      console.log(`[SwitchBot Channel] 设备状态已存储: ${deviceEvent.context.deviceType} (${deviceEvent.context.deviceMac})`);
+      console.log(`[SwitchBot Channel] Device status stored: ${deviceEvent.context.deviceType} (${deviceEvent.context.deviceMac})`);
     } catch (error) {
-      console.error('[SwitchBot Channel] 处理设备消息失败:', error);
+      console.error('[SwitchBot Channel] Failed to process device message:', error);
     }
   }
 
   /**
-   * 获取渠道状态
+   * Get channel status
    */
   getStatus(): any {
     return {
@@ -231,20 +231,20 @@ class SwitchBotChannel {
   }
 
   /**
-   * 健康检查
+   * Health check
    */
   healthCheck(): boolean {
     return this.isStarted && (this.mqttClient?.isConnected() || false);
   }
 }
 
-// 创建插件实例的工厂函数
+// Factory function to create plugin instance
 function create(config: any, context?: any): SwitchBotChannel {
-  // 传递上下文给构造函数，这样可以访问全局配置
+  // Pass context to constructor to access global configuration
   return new SwitchBotChannel(config, context?.globalConfig || context);
 }
 
-// 按照OpenClaw channel插件标准导出
+// Export according to OpenClaw channel plugin standard
 export const switchbotPlugin = {
   id: "switchbot",
   meta: {
@@ -257,11 +257,11 @@ export const switchbotPlugin = {
     aliases: ["switchbot"],
   },
   capabilities: {
-    chatTypes: [],  // SwitchBot是IoT设备通道，不支持聊天
-    media: false,   // SwitchBot不支持媒体文件
+    chatTypes: [],  // SwitchBot is IoT device channel, does not support chat
+    media: false,   // SwitchBot does not support media files
     features: {
-      inbound: true,   // 接收SwitchBot设备消息
-      outbound: false, // 不支持主动发送
+      inbound: true,   // Receive SwitchBot device messages
+      outbound: false, // Does not support active sending
       threading: false,
       reactions: false,
       editing: false,
@@ -269,8 +269,8 @@ export const switchbotPlugin = {
     }
   },
   config: {
-    // 账户管理
-    // 注意：cfg 参数是完整的 openclaw 配置对象，channel 配置在 cfg.channels.switchbot 下
+    // Account management
+    // Note: cfg parameter is complete openclaw config object, channel config is under cfg.channels.switchbot
     listAccountIds: (cfg: any) => {
       const config = cfg?.channels?.switchbot;
       return config?.token ? ['default'] : [];
@@ -287,7 +287,7 @@ export const switchbotPlugin = {
       return config?.token ? 'default' : null;
     },
     isConfigured: (account: any) => {
-      // 收到的是 resolveAccount 返回的账户对象
+      // Received is the account object returned by resolveAccount
       return !!(account?.configured);
     },
     describeAccount: (account: any, cfg: any) => {
@@ -323,7 +323,7 @@ export const switchbotPlugin = {
       required: []
     }
   },
-  // 网关配置
+  // Gateway configuration
   gateway: {
     async startAccount(ctx: any) {
       const { accountId, cfg, runtime, abortSignal } = ctx;
@@ -338,9 +338,9 @@ export const switchbotPlugin = {
       const channel = create(switchbotConfig, { runtime });
       await channel.start();
 
-      // 框架用 Promise.resolve(startAccount()) 跟踪生命周期。
-      // 如果这个 promise resolve 了，框架认为 channel 退出 → 触发 auto-restart。
-      // 所以返回一个挂起的 promise，只在 abortSignal 触发时 resolve。
+      // Framework uses Promise.resolve(startAccount()) to track lifecycle.
+      // If this promise resolves, framework considers channel exited → triggers auto-restart.
+      // So return a pending promise that only resolves when abortSignal triggers.
       return new Promise<void>((resolve) => {
         if (abortSignal) {
           abortSignal.addEventListener('abort', async () => {
@@ -352,12 +352,12 @@ export const switchbotPlugin = {
       });
     }
   },
-  // 状态检查
+  // Status checks
   status: {
-    // collectStatusIssues 接收的是账户快照数组 accounts.map(a => a.snapshot)
+    // collectStatusIssues receives account snapshot array accounts.map(a => a.snapshot)
     collectStatusIssues: (accountSnapshots: any) => {
       const issues: any[] = [];
-      // 如果是数组，检查是否有已配置的账户
+      // If it's an array, check if there are configured accounts
       if (Array.isArray(accountSnapshots)) {
         const hasConfigured = accountSnapshots.some((a: any) => a.configured);
         if (!hasConfigured && accountSnapshots.length === 0) {
@@ -368,10 +368,10 @@ export const switchbotPlugin = {
         }
         return issues;
       }
-      // fallback: 不应该走到这里
+      // fallback: should not reach here
       return issues;
     },
-    // buildChannelSummary 接收 { account, cfg, defaultAccountId, snapshot }
+    // buildChannelSummary receives { account, cfg, defaultAccountId, snapshot }
     buildChannelSummary: (params: any) => {
       const cfg = params?.cfg;
       const config = cfg?.channels?.switchbot;

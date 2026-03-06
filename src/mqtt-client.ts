@@ -1,7 +1,7 @@
 import mqtt from 'mqtt';
 import { MqttCredential } from './credential';
 
-// Logger接口兼容openclaw-mqtt
+// Logger interface compatible with openclaw-mqtt
 interface Logger {
   debug(msg: string): void;
   info(msg: string): void;
@@ -9,10 +9,10 @@ interface Logger {
   error(msg: string): void;
 }
 
-// Message handler类型
+// Message handler type
 type MessageHandler = (topic: string, payload: Buffer) => void;
 
-// MQTT over TLS 客户端管理器实现
+// MQTT over TLS client manager implementation
 class MqttTlsClientManager {
   private client: mqtt.MqttClient | null = null;
   private credential: MqttCredential;
@@ -23,7 +23,7 @@ class MqttTlsClientManager {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private isConnecting = false;  // 添加连接状态保护
+  private isConnecting = false;  // Add connection state protection
 
   constructor(credential: MqttCredential, logger: Logger) {
     this.credential = credential;
@@ -31,7 +31,7 @@ class MqttTlsClientManager {
   }
 
   async connect(): Promise<void> {
-    // 防止并发连接
+    // Prevent concurrent connections
     if (this.isConnecting) {
       this.logger.warn('Connection already in progress, skipping');
       return;
@@ -44,14 +44,14 @@ class MqttTlsClientManager {
 
     this.isConnecting = true;
 
-    // 清除挂起的重连定时器
+    // Clear pending reconnect timers
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
 
     try {
-      // 强制清理旧连接（移除所有 listener 防止幽灵事件）
+      // Force cleanup old connection (remove all listeners to prevent ghost events)
       if (this.client) {
         this.logger.info('Cleaning up existing client before new connection');
         this.client.removeAllListeners();
@@ -69,7 +69,7 @@ class MqttTlsClientManager {
         rejectUnauthorized: true,
       };
 
-      // 使用服务端分配的 clientId（不要加随机后缀，AWS IoT policy 绑定了固定 clientId）
+      // Use server-assigned clientId (don't add random suffix, AWS IoT policy binds to fixed clientId)
       const connectOptions = {
         clientId: this.credential.clientId,
         clean: true,
@@ -96,7 +96,7 @@ class MqttTlsClientManager {
           this.reconnectAttempts = 0;
           this.logger.info(`MQTT TLS connected successfully (${this.credential.clientId})`);
 
-          // 订阅状态主题
+          // Subscribe to status topic
           const statusTopic = this.credential.topics.status;
           this.client!.subscribe(statusTopic, { qos: this.credential.qos as 0 | 1 | 2 }, (err, granted) => {
             if (err) {
@@ -136,7 +136,7 @@ class MqttTlsClientManager {
         this.client.on('close', () => {
           this.isConnectedState = false;
 
-          // 主动断开或正在连接中（凭证更新），不触发 reconnect
+          // Intentional disconnect or connecting in progress (credential update), don't trigger reconnect
           if (this.intentionalDisconnect || this.isConnecting) {
             this.logger.debug('MQTT TLS connection closed (intentional)');
             return;
@@ -167,7 +167,7 @@ class MqttTlsClientManager {
   async disconnect(): Promise<void> {
     this.intentionalDisconnect = true;
 
-    // 清除重连定时器
+    // Clear reconnect timer
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -178,7 +178,7 @@ class MqttTlsClientManager {
       const client = this.client;
       this.client = null;
       client.removeAllListeners();
-      client.end(true); // force close，不等回调（避免竞态）
+      client.end(true); // force close, don't wait for callback (avoid race condition)
       this.logger.info('MQTT TLS disconnected');
     }
 
@@ -190,13 +190,13 @@ class MqttTlsClientManager {
   }
 
   subscribe(topic: string, handler: MessageHandler): void {
-    // 添加消息处理器
+    // Add message handler
     if (!this.messageHandlers.has(topic)) {
       this.messageHandlers.set(topic, []);
     }
     this.messageHandlers.get(topic)!.push(handler);
 
-    // 如果已连接，立即订阅
+    // If already connected, subscribe immediately
     if (this.client && this.isConnectedState) {
       this.client.subscribe(topic, { qos: this.credential.qos as 0 | 1 | 2 }, (err) => {
         if (err) {
@@ -212,7 +212,7 @@ class MqttTlsClientManager {
     return this.isConnectedState;
   }
 
-  // 重置重连状态（用于手动恢复连接）
+  // Reset reconnect state (for manual connection recovery)
   resetReconnectState(): void {
     this.reconnectAttempts = 0;
     if (this.reconnectTimer) {
@@ -222,26 +222,26 @@ class MqttTlsClientManager {
     this.logger.info('Reconnect state reset');
   }
 
-  // 更新凭证（用于凭证续期）— 始终断开旧连接并重连
+  // Update credentials (for credential renewal) — always disconnect old connection and reconnect
   async updateCredentials(newCredential: MqttCredential): Promise<void> {
     this.logger.info('Updating MQTT TLS credentials...');
     this.credential = newCredential;
 
-    // 无论当前是否连接，都断开并重连（确保使用新证书）
+    // Regardless of current connection state, disconnect and reconnect (ensure new certificate is used)
     await this.disconnect();
 
-    // 短暂等待确保 TCP 完全关闭
+    // Brief wait to ensure TCP is fully closed
     await new Promise(resolve => setTimeout(resolve, 500));
 
     this.logger.info('Reconnecting with new credentials...');
-    this.reconnectAttempts = 0; // 重置计数器
+    this.reconnectAttempts = 0; // Reset counter
     await this.connect();
     this.logger.info('Credentials updated and reconnected successfully');
   }
 
-  // 消息分发
+  // Message distribution
   private handleMessage(topic: string, payload: Buffer): void {
-    // 精确匹配
+    // Exact match
     const exactHandlers = this.messageHandlers.get(topic);
     if (exactHandlers) {
       exactHandlers.forEach(handler => {
@@ -253,7 +253,7 @@ class MqttTlsClientManager {
       });
     }
 
-    // 通配符匹配（简单实现）
+    // Wildcard matching (simple implementation)
     for (const [pattern, handlers] of this.messageHandlers.entries()) {
       if (pattern !== topic && this.topicMatches(topic, pattern)) {
         handlers.forEach(handler => {
@@ -267,7 +267,7 @@ class MqttTlsClientManager {
     }
   }
 
-  // 简单的MQTT主题匹配实现
+  // Simple MQTT topic matching implementation
   private topicMatches(topic: string, pattern: string): boolean {
     if (pattern === topic) return true;
 
@@ -279,11 +279,11 @@ class MqttTlsClientManager {
       const patternPart = patternParts[i];
 
       if (patternPart === '#') {
-        return true; // # 匹配剩余所有部分
+        return true; // # matches all remaining parts
       }
 
       if (patternPart === '+') {
-        continue; // + 匹配单个部分
+        continue; // + matches single part
       }
 
       if (topicPart !== patternPart) {
@@ -295,7 +295,7 @@ class MqttTlsClientManager {
   }
 }
 
-// 创建MQTT TLS客户端管理器的工厂函数
+// Factory function for creating MQTT TLS client manager
 export function createMqttTlsClient(credential: MqttCredential, logger?: Logger): MqttTlsClientManager {
   const defaultLogger: Logger = {
     debug: (msg) => console.debug(`[MQTT TLS] ${msg}`),
@@ -307,7 +307,7 @@ export function createMqttTlsClient(credential: MqttCredential, logger?: Logger)
   return new MqttTlsClientManager(credential, logger || defaultLogger);
 }
 
-// 保持向后兼容的函数（现在内部使用TLS连接）
+// Backward compatible function (now internally uses TLS connection)
 export function createAwsIoTMqttClient(credential: MqttCredential, qos?: 0 | 1 | 2, logger?: Logger): MqttTlsClientManager {
   return createMqttTlsClient(credential, logger);
 }

@@ -80,7 +80,7 @@ class MqttTlsClientManager {
         ...tlsOptions,
       };
 
-      this.logger.debug(`Client ID: ${this.credential.clientId}`);
+      // this.logger.debug(`Client ID: ${this.credential.clientId}`);
       this.logger.debug('Connecting with TLS certificates...');
 
       await new Promise<void>((resolve, reject) => {
@@ -114,16 +114,16 @@ class MqttTlsClientManager {
         });
 
         this.client.on('message', (topic, payload) => {
-          this.logger.info(`[RAW MSG] topic=${topic} len=${payload.length} payload=${payload.toString().slice(0, 200)}`);
+          // this.logger.info(`[RAW MSG] topic=${topic} len=${payload.length} payload=${payload.toString().slice(0, 200)}`);
           this.handleMessage(topic, payload);
         });
 
         this.client.on('packetsend', (packet: any) => {
-          this.logger.debug(`[PKT SEND] ${packet.cmd} ${JSON.stringify(packet).slice(0, 200)}`);
+          // this.logger.debug(`[PKT SEND] ${packet.cmd} ${JSON.stringify(packet).slice(0, 200)}`);
         });
 
         this.client.on('packetreceive', (packet: any) => {
-          this.logger.info(`[PKT RECV] ${packet.cmd} ${JSON.stringify(packet).slice(0, 200)}`);
+          // this.logger.info(`[PKT RECV] ${packet.cmd} ${JSON.stringify(packet).slice(0, 200)}`);
         });
 
         this.client.once('error', (error) => {

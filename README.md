@@ -28,19 +28,6 @@ SwitchBot Channel is an official channel plugin for the OpenClaw platform that r
 - 📊 **History Records**: Local storage of device status history
 - 🛡️ **High Availability**: Auto-reconnection with automatic recovery after network interruptions
 
-## 📋 Supported Devices
-
-| Device Type | Model | Monitoring Content |
-|-------------|-------|-------------------|
-| Contact Sensor | WoContact | Open/Close state, Brightness, Battery |
-| Temperature/Humidity Meter | WoMeter, WoMeterPro | Temperature, Humidity, Battery |
-| Curtain Controller | WoCurtain3 | Position, Calibration status, Battery |
-| Smart Plug | WoPlug | Power state, Power consumption |
-| Smart Bulb | WoBulb | Power, Brightness, Color, Color temperature |
-| Smart Lock | WoLock | Lock state, Door state, Battery |
-| Motion Sensor | WoMotion | Motion detection, Battery |
-| Presence Sensor | WoPresence | Presence detection, Battery |
-
 ## 🚀 Quick Start
 
 ### System Requirements
@@ -51,7 +38,7 @@ SwitchBot Channel is an official channel plugin for the OpenClaw platform that r
 
 ### Step 1: Install Plugin
 
-#### Method 1: NPM Installation (Recommended)
+#### NPM Installation
 
 ```bash
 # Install plugin
@@ -59,21 +46,6 @@ openclaw plugins install @openclaw/switchbot-channel
 
 # Verify installation
 openclaw plugins list
-```
-
-#### Method 2: Install from Source
-
-```bash
-# Clone repository
-git clone https://github.com/bug-monster/openclaw-extensions.git
-cd openclaw-extensions
-
-# Install dependencies and build
-npm install
-npm run build
-
-# Install to OpenClaw
-openclaw plugins install -l .
 ```
 
 ### Step 2: Get SwitchBot Credentials
@@ -129,40 +101,12 @@ openclaw status
   "channels": {
     "switchbot": {
       "enabled": true,
-      "token": "beb75f54fb2aed0ea6d6cc0444ebbe1b04b23d834125ccbbe7ef72652f51bcd64366b6f01beec8ffd6307ccd03c6e9fd",
-      "secret": "ba58a15a119678256c0d9fff00a607cb"
+      "token": "xxxx",
+      "secret": "xxxx"
     }
   }
 }
 ```
-
-### Advanced Configuration
-
-```json
-{
-  "channels": {
-    "switchbot": {
-      "enabled": true,
-      "token": "your_token",
-      "secret": "your_secret",
-      "credentialEndpoint": "https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential",
-      "qos": 1,
-      "renewBeforeMs": 3600000
-    }
-  }
-}
-```
-
-### Configuration Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `enabled` | boolean | ❌ | `true` | Whether to enable SwitchBot channel |
-| `token` | string | ✅ | - | SwitchBot API Token |
-| `secret` | string | ✅ | - | SwitchBot API Secret |
-| `credentialEndpoint` | string | ❌ | AWS IoT endpoint | IoT credential endpoint URL |
-| `qos` | 0\|1\|2 | ❌ | `1` | MQTT message quality level |
-| `renewBeforeMs` | number | ❌ | `3600000` | Credential renewal lead time (milliseconds) |
 
 ## 📱 Usage Guide
 
@@ -178,33 +122,6 @@ openclaw devices list switchbot
 openclaw devices show <device_id>
 ```
 
-### Smart Notifications
-
-The plugin will send notifications for the following important events:
-
-#### 🔒 Security Events
-- Contact sensor abnormal opening
-- Night motion detection (22:00-06:00)
-- Late night lock unlock (23:00-05:00)
-
-#### 🌡️ Environmental Anomalies
-- Extreme temperature (< 5°C or > 35°C)
-- Extreme humidity (< 20% or > 85%)
-
-#### ⚡ Device Failures
-- Low device battery (< 10%)
-- Device offline for more than 30 minutes
-
-### Agent Tools
-
-When the plugin is running, OpenClaw Agent can use the following tools:
-
-```
-Check SwitchBot device status
-Get device alert information
-View plugin runtime status
-```
-
 ## 🔍 Troubleshooting
 
 ### Common Issues
@@ -218,38 +135,6 @@ openclaw config validate
 
 # View detailed errors
 openclaw gateway logs --follow
-```
-
-#### Q: Not receiving device messages
-**A**: Verify credentials and network
-
-1. **Check SwitchBot credentials**:
-   ```bash
-   # Test API connection
-   curl -H "Authorization: your_token" \
-        -H "sign: your_hmac_signature" \
-        https://api.switch-bot.com/v1.1/devices
-   ```
-
-2. **Check network connection**:
-   - Ensure access to AWS IoT Core
-   - Check firewall settings
-
-3. **Verify devices are online**:
-   - Confirm devices are online in SwitchBot App
-   - Try controlling devices to confirm normal connection
-
-#### Q: Frequent reconnections
-**A**: Adjust renewal time
-
-```json
-{
-  "channels": {
-    "switchbot": {
-      "renewBeforeMs": 1800000  // Renew every 30 minutes
-    }
-  }
-}
 ```
 
 ### Debug Mode
@@ -291,54 +176,6 @@ rm -rf ~/.openclaw/cache/plugins/switchbot
 openclaw gateway start
 ```
 
-## 🛠️ Development Guide
-
-### Local Development
-
-```bash
-# Clone project
-git clone https://github.com/bug-monster/openclaw-extensions.git
-cd openclaw-extensions
-
-# Install dependencies
-npm install
-
-# Development mode (auto-compile)
-npm run dev
-
-# Run tests
-npm test
-
-# Check code quality
-npm run lint
-```
-
-### Project Structure
-
-```
-src/
-├── channel.ts           # Main channel class
-├── config.ts            # Configuration validation and management
-├── credential.ts        # AWS IoT credential service
-├── mqtt-client.ts       # MQTT client wrapper
-├── message-handler.ts   # Message processing and validation
-├── device-store.ts      # Device status storage
-├── types.ts             # TypeScript type definitions
-└── runtime.ts           # Runtime utilities
-
-dist/                    # Compiled output
-tests/                   # Unit tests
-```
-
-### API Documentation
-
-The plugin follows OpenClaw Channel Plugin standards and implements the following interfaces:
-
-- **Account Management**: `listAccountIds`, `resolveAccount`
-- **Configuration Management**: `configSchema`, `isConfigured`
-- **Gateway Services**: `startAccount`, `stopAccount`
-- **Status Monitoring**: `collectStatusIssues`, `probeAccount`
-
 ---
 
 # 中文
@@ -357,19 +194,6 @@ SwitchBot Channel 是 OpenClaw 平台的官方渠道插件，通过 AWS IoT Core
 - 📊 **历史记录**：本地存储设备状态历史
 - 🛡️ **高可用**：自动重连，网络中断后自动恢复
 
-## 📋 支持的设备
-
-| 设备类型 | 型号 | 监控内容 |
-|---------|------|----------|
-| 门窗传感器 | WoContact | 开关状态、亮度、电量 |
-| 温湿度计 | WoMeter, WoMeterPro | 温度、湿度、电量 |
-| 窗帘控制器 | WoCurtain3 | 位置、校准状态、电量 |
-| 智能插座 | WoPlug | 开关状态、功率 |
-| 智能灯泡 | WoBulb | 开关、亮度、颜色、色温 |
-| 智能门锁 | WoLock | 锁定状态、门状态、电量 |
-| 运动传感器 | WoMotion | 运动检测、电量 |
-| 人体存在传感器 | WoPresence | 存在检测、电量 |
-
 ## 🚀 快速开始
 
 ### 系统要求
@@ -380,7 +204,7 @@ SwitchBot Channel 是 OpenClaw 平台的官方渠道插件，通过 AWS IoT Core
 
 ### 第一步：安装插件
 
-#### 方法1：NPM 安装（推荐）
+#### NPM 安装
 
 ```bash
 # 安装插件
@@ -388,21 +212,6 @@ openclaw plugins install @openclaw/switchbot-channel
 
 # 验证安装
 openclaw plugins list
-```
-
-#### 方法2：从源码安装
-
-```bash
-# 克隆仓库
-git clone https://github.com/bug-monster/openclaw-extensions.git
-cd openclaw-extensions
-
-# 安装依赖并构建
-npm install
-npm run build
-
-# 安装到 OpenClaw
-openclaw plugins install -l .
 ```
 
 ### 第二步：获取 SwitchBot 凭证
@@ -458,40 +267,12 @@ openclaw status
   "channels": {
     "switchbot": {
       "enabled": true,
-      "token": "beb75f54fb2aed0ea6d6cc0444ebbe1b04b23d834125ccbbe7ef72652f51bcd64366b6f01beec8ffd6307ccd03c6e9fd",
-      "secret": "ba58a15a119678256c0d9fff00a607cb"
+      "token": "xxxx",
+      "secret": "xxxx"
     }
   }
 }
 ```
-
-### 高级配置
-
-```json
-{
-  "channels": {
-    "switchbot": {
-      "enabled": true,
-      "token": "your_token",
-      "secret": "your_secret",
-      "credentialEndpoint": "https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential",
-      "qos": 1,
-      "renewBeforeMs": 3600000
-    }
-  }
-}
-```
-
-### 配置参数说明
-
-| 参数 | 类型 | 必需 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `enabled` | boolean | ❌ | `true` | 是否启用 SwitchBot 渠道 |
-| `token` | string | ✅ | - | SwitchBot API Token |
-| `secret` | string | ✅ | - | SwitchBot API Secret |
-| `credentialEndpoint` | string | ❌ | AWS IoT endpoint | IoT 凭证获取地址 |
-| `qos` | 0\|1\|2 | ❌ | `1` | MQTT 消息质量等级 |
-| `renewBeforeMs` | number | ❌ | `3600000` | 凭证续期提前时间（毫秒） |
 
 ## 📱 使用指南
 
@@ -507,33 +288,6 @@ openclaw devices list switchbot
 openclaw devices show <device_id>
 ```
 
-### 智能通知
-
-插件会在以下重要事件时发送通知：
-
-#### 🔒 安全事件
-- 门窗传感器异常开启
-- 夜间（22:00-06:00）运动检测
-- 深夜（23:00-05:00）门锁解锁
-
-#### 🌡️ 环境异常
-- 极端温度（< 5°C 或 > 35°C）
-- 极端湿度（< 20% 或 > 85%）
-
-#### ⚡ 设备故障
-- 设备电量过低（< 10%）
-- 设备离线超过 30 分钟
-
-### Agent 工具
-
-当插件运行时，OpenClaw Agent 可以使用以下工具：
-
-```
-检查 SwitchBot 设备状态
-获取设备警报信息
-查看插件运行状态
-```
-
 ## 🔍 故障排除
 
 ### 常见问题
@@ -547,38 +301,6 @@ openclaw config validate
 
 # 查看详细错误
 openclaw gateway logs --follow
-```
-
-#### Q: 收不到设备消息
-**A**: 验证凭证和网络
-
-1. **检查 SwitchBot 凭证**：
-   ```bash
-   # 测试 API 连接
-   curl -H "Authorization: your_token" \
-        -H "sign: your_hmac_signature" \
-        https://api.switch-bot.com/v1.1/devices
-   ```
-
-2. **检查网络连接**：
-   - 确保能访问 AWS IoT Core
-   - 检查防火墙设置
-
-3. **验证设备在线**：
-   - 在 SwitchBot App 中确认设备在线
-   - 尝试控制设备确认连接正常
-
-#### Q: 频繁重连
-**A**: 调整续期时间
-
-```json
-{
-  "channels": {
-    "switchbot": {
-      "renewBeforeMs": 1800000  // 30分钟续期一次
-    }
-  }
-}
 ```
 
 ### 调试模式
@@ -619,94 +341,5 @@ rm -rf ~/.openclaw/cache/plugins/switchbot
 # 重新启动
 openclaw gateway start
 ```
-
-## 🛠️ 开发指南
-
-### 本地开发
-
-```bash
-# 克隆项目
-git clone https://github.com/bug-monster/openclaw-extensions.git
-cd openclaw-extensions
-
-# 安装依赖
-npm install
-
-# 开发模式（自动编译）
-npm run dev
-
-# 运行测试
-npm test
-
-# 检查代码质量
-npm run lint
-```
-
-### 项目结构
-
-```
-src/
-├── channel.ts           # 主渠道类
-├── config.ts            # 配置验证和管理
-├── credential.ts        # AWS IoT 凭证服务
-├── mqtt-client.ts       # MQTT 客户端封装
-├── message-handler.ts   # 消息处理和验证
-├── device-store.ts      # 设备状态存储
-├── types.ts             # TypeScript 类型定义
-└── runtime.ts           # 运行时工具
-
-dist/                    # 编译输出
-tests/                   # 单元测试
-```
-
-### API 文档
-
-插件遵循 OpenClaw Channel Plugin 标准，实现以下接口：
-
-- **账户管理**：`listAccountIds`, `resolveAccount`
-- **配置管理**：`configSchema`, `isConfigured`
-- **网关服务**：`startAccount`, `stopAccount`
-- **状态监控**：`collectStatusIssues`, `probeAccount`
-
-## 📄 License | 许可证
-
-This project is licensed under the [MIT License](LICENSE). | 本项目采用 [MIT License](LICENSE) 许可证。
-
-## 🤝 Contributing | 贡献
-
-We welcome contributions of all kinds! | 我们欢迎各种形式的贡献！
-
-### Report Issues | 报告问题
-
-Report in [GitHub Issues](https://github.com/bug-monster/openclaw-extensions/issues): | 在 [GitHub Issues](https://github.com/bug-monster/openclaw-extensions/issues) 中报告：
-- 🐛 Bug reports | Bug 报告
-- 💡 Feature suggestions | 功能建议
-- 📚 Documentation improvements | 文档改进
-
-### Submit Code | 提交代码
-
-1. Fork the project | Fork 项目
-2. Create a feature branch | 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. Commit your changes | 提交更改 (`git commit -m 'Add amazing feature'`)
-4. Push to the branch | 推送到分支 (`git push origin feature/amazing-feature`)
-5. Create a Pull Request | 创建 Pull Request
-
-## 🔗 Related Links | 相关链接
-
-- [OpenClaw Documentation | OpenClaw 官方文档](https://docs.openclaw.ai/)
-- [SwitchBot API Documentation | SwitchBot API 文档](https://github.com/OpenWonderLabs/SwitchBotAPI)
-- [OpenClaw Plugin Development Guide | OpenClaw 插件开发指南](https://docs.openclaw.ai/plugins/)
-- [AWS IoT Core Documentation | AWS IoT Core 文档](https://docs.aws.amazon.com/iot/)
-
-## 📞 Support | 支持
-
-For help, please: | 如需帮助，请：
-
-1. Check [FAQ documentation](docs/FAQ.md) | 查看 [FAQ 文档](docs/FAQ.md)
-2. Search [existing Issues](https://github.com/bug-monster/openclaw-extensions/issues) | 搜索 [现有 Issues](https://github.com/bug-monster/openclaw-extensions/issues)
-3. Create a new [Issue](https://github.com/bug-monster/openclaw-extensions/issues/new) | 创建新的 [Issue](https://github.com/bug-monster/openclaw-extensions/issues/new)
-4. Join [OpenClaw Community](https://discord.gg/openclaw) | 加入 [OpenClaw 社区](https://discord.gg/openclaw)
-
----
 
 **Made with ❤️ by the SwitchBot Team**

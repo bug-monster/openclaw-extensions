@@ -1,5 +1,5 @@
 {
-  "id": "switchbot",
+  "id": "switchbot-channel",
   "channels": ["switchbot"],
   "name": "SwitchBot",
   "version": "0.1.0",

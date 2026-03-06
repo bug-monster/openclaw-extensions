@@ -1,5 +1,5 @@
 {
-  "name": "@switchbot/openclaw-channel",
+  "name": "@openclaw/switchbot-channel",
   "version": "0.1.0",
   "description": "SwitchBot channel plugin for OpenClaw — real-time device status via AWS IoT Core",
   "main": "dist/index.js",

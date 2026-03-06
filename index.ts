@@ -6,7 +6,7 @@ import { getDeviceStore } from "./src/device-store";
 import type { SwitchbotPluginModule } from "./src/types";
 
 const plugin: SwitchbotPluginModule = {
-  id: "switchbot",
+  id: "switchbot-channel",
   name: "SwitchBot Channel",
   description: "SwitchBot IoT device channel via AWS IoT Core MQTT streaming",
   configSchema: emptyPluginConfigSchema(),

@@ -39,13 +39,16 @@ function extractSwitchBotConfig(config: any, globalConfig?: any): any {
   return config;
 }
 
+// 模块级单例：防止 OpenClaw auto-restart 创建多个 MQTT 连接
+let activeInstance: SwitchBotChannel | null = null;
+
 /**
  * SwitchBot Channel Plugin for OpenClaw
  * 通过 AWS IoT Core MQTT 实时接收 SwitchBot 设备状态变化
  */
 class SwitchBotChannel {
   private credentialService: CredentialService | null = null;
-  private mqttClient: any = null; // 使用any暂时避免类型问题
+  private mqttClient: any = null;
   private config: SwitchBotConfig;
   private isStarted = false;
 
@@ -61,6 +64,13 @@ class SwitchBotChannel {
     if (this.isStarted) {
       return;
     }
+
+    // 单例保护：如果已有活跃实例，先停掉它
+    if (activeInstance && activeInstance !== this) {
+      console.log('[SwitchBot Channel] 检测到已有活跃实例，先停止旧实例...');
+      await activeInstance.stop();
+    }
+    activeInstance = this;
 
     try {
       console.log('[SwitchBot Channel] 开始启动...');
@@ -114,6 +124,7 @@ class SwitchBotChannel {
       }
 
       this.isStarted = false;
+      if (activeInstance === this) activeInstance = null;
       console.log('[SwitchBot Channel] 停止完成');
     } catch (error) {
       console.error('[SwitchBot Channel] 停止失败:', error);
@@ -121,11 +132,20 @@ class SwitchBotChannel {
   }
 
   /**
-   * 连接 MQTT TLS 客户端
+   * 连接 MQTT TLS 客户端（单例：先销毁旧客户端再创建新的）
    */
   private async connectMQTT(credentials: MqttCredential): Promise<void> {
     try {
-      // 创建MQTT TLS客户端管理器
+      // 先彻底销毁旧客户端，防止 clientId 冲突
+      if (this.mqttClient) {
+        console.log('[SwitchBot Channel] 销毁旧 MQTT 客户端...');
+        try { await this.mqttClient.disconnect(); } catch (_) {}
+        this.mqttClient = null;
+        // 等待 TCP 完全释放
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // 创建新的 MQTT TLS 客户端管理器
       this.mqttClient = createMqttTlsClient(
         credentials,
         {
@@ -336,7 +356,7 @@ export const switchbotPlugin = {
   // 网关配置
   gateway: {
     async startAccount(ctx: any) {
-      const { accountId, cfg, runtime } = ctx;
+      const { accountId, cfg, runtime, abortSignal } = ctx;
       console.log(`[SwitchBot Channel] Starting account ${accountId}...`);
 
       const switchbotConfig = cfg?.channels?.switchbot;
@@ -346,12 +366,18 @@ export const switchbotPlugin = {
       const channel = create(switchbotConfig, { runtime });
       await channel.start();
 
-      return {
-        stop: async () => {
-          console.log(`[SwitchBot Channel] Stopping account ${accountId}...`);
-          await channel.stop();
+      // 框架用 Promise.resolve(startAccount()) 跟踪生命周期。
+      // 如果这个 promise resolve 了，框架认为 channel 退出 → 触发 auto-restart。
+      // 所以返回一个挂起的 promise，只在 abortSignal 触发时 resolve。
+      return new Promise<void>((resolve) => {
+        if (abortSignal) {
+          abortSignal.addEventListener('abort', async () => {
+            console.log(`[SwitchBot Channel] Stopping account ${accountId} (abort signal)...`);
+            await channel.stop();
+            resolve();
+          }, { once: true });
         }
-      };
+      });
     }
   },
   // 状态检查

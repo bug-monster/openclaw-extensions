@@ -48,8 +48,8 @@
       },
       "renewBeforeMs": {
         "type": "number",
-        "default": 300000,
-        "description": "Renew credentials before expiry (milliseconds)"
+        "default": 3600000,
+        "description": "Renew credentials interval (milliseconds, default 1 hour)"
       }
     }
   }

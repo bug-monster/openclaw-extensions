@@ -33,11 +33,7 @@ class MqttTlsClientManager {
   async connect(): Promise<void> {
     // 防止并发连接
     if (this.isConnecting) {
-      this.logger.warn('Connection already in progress, waiting...');
-      // 等待当前连接完成
-      while (this.isConnecting) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      this.logger.warn('Connection already in progress, skipping');
       return;
     }
 
@@ -46,166 +42,147 @@ class MqttTlsClientManager {
       return;
     }
 
-    this.isConnecting = true; // 设置连接中标志
+    this.isConnecting = true;
 
-    // 如果有正在进行的重连定时器，清除它
+    // 清除挂起的重连定时器
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
 
     try {
-      return new Promise((resolve, reject) => {
-        try {
-          // 强制清理可能存在的旧连接
-          if (this.client && !this.client.disconnected) {
-            this.logger.info('Cleaning up existing client before new connection');
-            this.client.end(true); // 强制断开
-            this.client = null;
+      // 强制清理旧连接（移除所有 listener 防止幽灵事件）
+      if (this.client) {
+        this.logger.info('Cleaning up existing client before new connection');
+        this.client.removeAllListeners();
+        this.client.end(true);
+        this.client = null;
+      }
+
+      this.logger.info(`Connecting to MQTT broker: ${this.credential.brokerUrl}`);
+      this.logger.debug(`Region: ${this.credential.region}`);
+
+      const tlsOptions = {
+        ca: this.credential.tls.caBase64,
+        cert: this.credential.tls.certBase64,
+        key: this.credential.tls.keyBase64,
+        rejectUnauthorized: true,
+      };
+
+      // 使用服务端分配的 clientId（不要加随机后缀，AWS IoT policy 绑定了固定 clientId）
+      const connectOptions = {
+        clientId: this.credential.clientId,
+        clean: true,
+        connectTimeout: 30000,
+        reconnectPeriod: 0,
+        keepalive: 60,
+        reschedulePings: true,
+        ...tlsOptions,
+      };
+
+      this.logger.debug(`Client ID: ${this.credential.clientId}`);
+      this.logger.debug('Connecting with TLS certificates...');
+
+      await new Promise<void>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error('MQTT TLS connection timeout (30s)'));
+        }, 30000);
+
+        this.client = mqtt.connect(this.credential.brokerUrl, connectOptions);
+
+        this.client.once('connect', () => {
+          clearTimeout(timeoutId);
+          this.isConnectedState = true;
+          this.reconnectAttempts = 0;
+          this.logger.info(`MQTT TLS connected successfully (${this.credential.clientId})`);
+
+          // 订阅状态主题
+          const statusTopic = this.credential.topics.status;
+          this.client!.subscribe(statusTopic, { qos: this.credential.qos as 0 | 1 | 2 }, (err, granted) => {
+            if (err) {
+              this.logger.error(`Failed to subscribe to status topic: ${statusTopic} error: ${err.message}`);
+            } else {
+              const grantedInfo = granted?.map(g => `${g.topic} qos=${g.qos}`).join(', ') || 'unknown';
+              this.logger.info(`Subscribe result for ${statusTopic}: [${grantedInfo}]`);
+              if (granted?.some(g => g.qos === 128)) {
+                this.logger.error(`⚠️ Broker REJECTED subscription (qos=128)! IoT policy may not allow this topic.`);
+              }
+            }
+          });
+
+          resolve();
+        });
+
+        this.client.on('message', (topic, payload) => {
+          this.logger.info(`[RAW MSG] topic=${topic} len=${payload.length} payload=${payload.toString().slice(0, 200)}`);
+          this.handleMessage(topic, payload);
+        });
+
+        this.client.on('packetsend', (packet: any) => {
+          this.logger.debug(`[PKT SEND] ${packet.cmd} ${JSON.stringify(packet).slice(0, 200)}`);
+        });
+
+        this.client.on('packetreceive', (packet: any) => {
+          this.logger.info(`[PKT RECV] ${packet.cmd} ${JSON.stringify(packet).slice(0, 200)}`);
+        });
+
+        this.client.once('error', (error) => {
+          clearTimeout(timeoutId);
+          this.isConnectedState = false;
+          this.logger.error(`MQTT TLS connection error: ${error.message}`);
+          reject(error);
+        });
+
+        this.client.on('close', () => {
+          this.isConnectedState = false;
+
+          // 主动断开或正在连接中（凭证更新），不触发 reconnect
+          if (this.intentionalDisconnect || this.isConnecting) {
+            this.logger.debug('MQTT TLS connection closed (intentional)');
+            return;
           }
 
-          this.logger.info(`Connecting to MQTT broker: ${this.credential.brokerUrl}`);
-          this.logger.debug(`Client ID: ${this.credential.clientId}`);
-          this.logger.debug(`Region: ${this.credential.region}`);
+          this.logger.warn('MQTT TLS connection closed unexpectedly');
 
-          // 准备TLS证书 - 证书数据已经是PEM格式，不需要Base64解码
-          // 只需要确保换行符正确处理
-          const tlsOptions = {
-            ca: this.credential.tls.caBase64,
-            cert: this.credential.tls.certBase64,
-            key: this.credential.tls.keyBase64,
-            rejectUnauthorized: true,
-          };
+          if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            const delay = Math.min(Math.pow(2, this.reconnectAttempts - 1) * 1000, 30000);
+            this.logger.info(`Scheduling reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
 
-          this.logger.debug('Using PEM certificates for TLS connection');
-          this.logger.debug(`CA cert starts with: ${this.credential.tls.caBase64.slice(0, 50)}...`);
-          this.logger.debug(`Client cert starts with: ${this.credential.tls.certBase64.slice(0, 50)}...`);
-          this.logger.debug(`Private key starts with: ${this.credential.tls.keyBase64.slice(0, 50)}...`);
-
-          // MQTT连接选项 - 使用唯一的客户端ID避免冲突
-          const uniqueClientId = `${this.credential.clientId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
-          const connectOptions = {
-            clientId: uniqueClientId,  // 使用唯一ID
-            clean: true,
-            connectTimeout: 30000,
-            reconnectPeriod: 0,         // 禁用自动重连
-            keepalive: 60,              // 保持心跳检测
-            reschedulePings: true,      // 重新安排ping
-            // TLS配置
-            ...tlsOptions,
-          };
-
-          this.logger.debug(`Using unique client ID: ${uniqueClientId}`);
-          this.logger.debug('Connecting with TLS certificates...');
-
-          this.client = mqtt.connect(this.credential.brokerUrl, connectOptions);
-
-          this.client.on('connect', () => {
-            this.isConnectedState = true;
-            this.reconnectAttempts = 0; // 重置重连计数器
-            this.logger.info(`MQTT TLS connected successfully (${uniqueClientId})`);
-
-            // 自动订阅SwitchBot状态主题
-            const statusTopic = this.credential.topics.status;
-            this.client!.subscribe(statusTopic, { qos: this.credential.qos as 0 | 1 | 2 }, (err) => {
-              if (err) {
-                this.logger.error(`Failed to subscribe to status topic: ${statusTopic}`);
-              } else {
-                this.logger.info(`Subscribed to status topic: ${statusTopic}`);
-              }
-            });
-
-            resolve();
-          });
-
-          this.client.on('message', (topic, payload, packet) => {
-            this.handleMessage(topic, payload);
-          });
-
-          this.client.on('error', (error) => {
-            this.isConnectedState = false;
-            this.logger.error(`MQTT TLS connection error: ${error.message}`);
-            reject(error);
-          });
-
-          this.client.on('offline', () => {
-            this.isConnectedState = false;
-            this.logger.warn('MQTT TLS offline, attempting reconnect...');
-          });
-
-          this.client.on('close', () => {
-            this.isConnectedState = false;
-            this.logger.warn('MQTT TLS connection closed');
-
-            // 只有在非主动断开的情况下才尝试重连
-            if (!this.intentionalDisconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-              this.reconnectAttempts++; // 在这里递增计数器
-              const delay = Math.min(Math.pow(2, this.reconnectAttempts - 1) * 1000, 30000); // 修正指数计算
-
-              this.logger.info(`Attempting manual reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts} after ${delay}ms`);
-
-              this.reconnectTimer = setTimeout(() => {
-                this.connect().catch(err => {
-                  this.logger.error(`Manual reconnect attempt failed: ${err.message}`);
-                });
-              }, delay);
-            } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-              this.logger.error('Max reconnect attempts reached, giving up automatic reconnection');
-            }
-          });
-
-          this.client.on('reconnect', () => {
-            // 由于我们已禁用自动重连，这个事件不应该被触发
-            this.logger.debug('MQTT TLS reconnect event triggered (should not happen with reconnectPeriod=0)');
-          });
-
-          // 连接超时处理
-          const timeoutId = setTimeout(() => {
-            if (!this.isConnectedState) {
-              reject(new Error('MQTT TLS connection timeout'));
-            }
-          }, 30000);
-
-          // 确保在连接成功后清除超时
-          this.client.on('connect', () => {
-            clearTimeout(timeoutId);
-          });
-
-        } catch (error) {
-          reject(error);
-        }
+            this.reconnectTimer = setTimeout(() => {
+              this.connect().catch(err => {
+                this.logger.error(`Reconnect attempt failed: ${err.message}`);
+              });
+            }, delay);
+          } else {
+            this.logger.error('Max reconnect attempts reached');
+          }
+        });
       });
     } finally {
-      this.isConnecting = false; // 确保连接标志被重置
+      this.isConnecting = false;
     }
   }
 
   async disconnect(): Promise<void> {
-    return new Promise((resolve) => {
-      this.intentionalDisconnect = true; // 标记为主动断开
-      this.isConnecting = false; // 重置连接状态
+    this.intentionalDisconnect = true;
 
-      // 清除重连定时器
-      if (this.reconnectTimer) {
-        clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = null;
-      }
+    // 清除重连定时器
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
 
-      if (this.client) {
-        this.isConnectedState = false;
-        this.client.end(false, {}, () => {  // 使用正常断开而不是强制断开
-          this.client = null;
-          this.messageHandlers.clear();
-          this.intentionalDisconnect = false; // 重置标志
-          this.logger.info('MQTT TLS disconnected');
-          resolve();
-        });
-      } else {
-        this.intentionalDisconnect = false; // 重置标志
-        resolve();
-      }
-    });
+    if (this.client) {
+      this.isConnectedState = false;
+      const client = this.client;
+      this.client = null;
+      client.removeAllListeners();
+      client.end(true); // force close，不等回调（避免竞态）
+      this.logger.info('MQTT TLS disconnected');
+    }
+
+    this.intentionalDisconnect = false;
   }
 
   async publish(topic: string, message: string, qos?: 0 | 1 | 2): Promise<void> {
@@ -245,24 +222,21 @@ class MqttTlsClientManager {
     this.logger.info('Reconnect state reset');
   }
 
-  // 更新凭证（用于凭证续期）
+  // 更新凭证（用于凭证续期）— 始终断开旧连接并重连
   async updateCredentials(newCredential: MqttCredential): Promise<void> {
     this.logger.info('Updating MQTT TLS credentials...');
     this.credential = newCredential;
 
-    if (this.client && this.isConnectedState) {
-      this.logger.info('Disconnecting current connection to update credentials...');
-      await this.disconnect();
+    // 无论当前是否连接，都断开并重连（确保使用新证书）
+    await this.disconnect();
 
-      // 等待一小段时间确保连接完全关闭
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    // 短暂等待确保 TCP 完全关闭
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-      this.logger.info('Reconnecting with new credentials...');
-      await this.connect();
-      this.logger.info('Credentials updated and reconnected successfully');
-    } else {
-      this.logger.debug('No active connection, credentials updated for next connection');
-    }
+    this.logger.info('Reconnecting with new credentials...');
+    this.reconnectAttempts = 0; // 重置计数器
+    await this.connect();
+    this.logger.info('Credentials updated and reconnected successfully');
   }
 
   // 消息分发

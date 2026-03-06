@@ -85,13 +85,18 @@ export class CredentialService {
       throw new Error(`Credential fetch failed: ${data.message}`);
     }
 
-    // 检查内层 statusCode
-    if (data.body?.statusCode !== 100) {
-      throw new Error(`SwitchBot IoT credential error (${data.body?.statusCode}): ${data.body?.message || 'unknown'}`);
+    // 兼容两种 API 响应格式：
+    // 格式A (三层): { statusCode, body: { statusCode, body: { channels: { mqtt } } } }
+    // 格式B (两层): { statusCode, body: { channels: { mqtt } } }
+    const outerBody = data.body;
+    const mqttConfig = outerBody?.body?.channels?.mqtt  // 格式A
+                    || outerBody?.channels?.mqtt;         // 格式B
+
+    if (!mqttConfig) {
+      throw new Error('MQTT config not found in credential response');
     }
 
-    const parsed = CredentialResponse.parse(data);
-    this.current = parsed.body.body.channels.mqtt;
+    this.current = mqttConfig as MqttCredential;
     this.lastFetchTime = Date.now();
     this.scheduleRenewal();
 

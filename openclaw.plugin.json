@@ -34,23 +34,13 @@
       "secret": {
         "type": "string",
         "description": "SwitchBot API secret from developer settings"
-      },
-      "credentialEndpoint": {
-        "type": "string",
-        "default": "https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential",
-        "description": "SwitchBot IoT credential endpoint"
-      },
-      "qos": {
-        "type": "number",
-        "enum": [0, 1, 2],
-        "default": 1,
-        "description": "MQTT QoS level"
-      },
-      "renewBeforeMs": {
-        "type": "number",
-        "default": 3600000,
-        "description": "Renew credentials interval (milliseconds, default 1 hour)"
       }
-    }
-  }
+    },
+    "required": ["token", "secret"]
+  },
+  "uiHints": {
+    "token": { "label": "API Token", "placeholder": "从 SwitchBot App 开发者设置获取", "sensitive": true },
+    "secret": { "label": "API Secret", "placeholder": "从 SwitchBot App 开发者设置获取", "sensitive": true }
+  },
+  "tools": ["switchbot_status"]
 }

@@ -1,15 +1,27 @@
 import { z } from 'zod';
 
+// 内置常量
+const DEFAULT_CREDENTIAL_ENDPOINT = 'https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential';
+const DEFAULT_QOS = 1;
+const DEFAULT_RENEW_BEFORE_MS = 3600000; // 1小时续期
+
 export const SwitchBotConfig = z.object({
   token: z.string().min(10, 'Token 至少 10 个字符'),
   secret: z.string().min(10, 'Secret 至少 10 个字符'),
-  credentialEndpoint: z.string().url().default('https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential'),
-  qos: z.union([z.literal(0), z.literal(1), z.literal(2)]).default(1),
-  renewBeforeMs: z.number().min(60000).max(86400000).default(3600000), // 默认1小时续期，最大24小时
 });
 
-export type SwitchBotConfig = z.infer<typeof SwitchBotConfig>;
+export type SwitchBotConfig = z.infer<typeof SwitchBotConfig> & {
+  credentialEndpoint: string;
+  qos: 0 | 1 | 2;
+  renewBeforeMs: number;
+};
 
 export function validateConfig(config: unknown): SwitchBotConfig {
-  return SwitchBotConfig.parse(config);
+  const parsed = SwitchBotConfig.parse(config);
+  return {
+    ...parsed,
+    credentialEndpoint: DEFAULT_CREDENTIAL_ENDPOINT,
+    qos: DEFAULT_QOS,
+    renewBeforeMs: DEFAULT_RENEW_BEFORE_MS,
+  };
 }

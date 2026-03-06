@@ -97,14 +97,14 @@ export class CredentialService {
     this.lastFetchTime = Date.now();
     this.scheduleRenewal();
 
-    console.log('[SwitchBot Credential] MQTT configuration fetched successfully:', {
-      brokerUrl: this.current.brokerUrl,
-      clientId: this.current.clientId,
-      region: this.current.region,
-      statusTopic: this.current.topics.status,
-      qos: this.current.qos,
-      tlsEnabled: this.current.tls.enabled,
-    });
+    // console.log('[SwitchBot Credential] MQTT configuration fetched successfully:', {
+    //   brokerUrl: this.current.brokerUrl,
+    //   clientId: this.current.clientId,
+    //   region: this.current.region,
+    //   statusTopic: this.current.topics.status,
+    //   qos: this.current.qos,
+    //   tlsEnabled: this.current.tls.enabled,
+    // });
 
     return this.current;
   }

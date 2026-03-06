@@ -87,13 +87,13 @@ class SwitchBotChannel {
 
       // Get initial credentials
       const credentials = await this.credentialService.fetch();
-      console.log('[SwitchBot Channel] MQTT credentials fetched successfully:', {
-        brokerUrl: credentials.brokerUrl,
-        region: credentials.region,
-        clientId: credentials.clientId,
-        statusTopic: credentials.topics.status,
-        qos: credentials.qos
-      });
+      // console.log('[SwitchBot Channel] MQTT credentials fetched successfully:', {
+      //   brokerUrl: credentials.brokerUrl,
+      //   region: credentials.region,
+      //   clientId: credentials.clientId,
+      //   statusTopic: credentials.topics.status,
+      //   qos: credentials.qos
+      // });
 
       // Create and start MQTT TLS client
       await this.connectMQTT(credentials);

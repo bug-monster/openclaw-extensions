@@ -44,7 +44,7 @@ let activeInstance: SwitchBotChannel | null = null;
 
 /**
  * SwitchBot Channel Plugin for OpenClaw
- * Receive real-time SwitchBot device status changes via AWS IoT Core MQTT
+ * Receive real-time SwitchBot device status changes
  */
 class SwitchBotChannel {
   private credentialService: CredentialService | null = null;
@@ -253,7 +253,7 @@ export const switchbotPlugin = {
     selectionLabel: "SwitchBot (Smart Home)",
     docsPath: "/channels/switchbot",
     docsLabel: "switchbot",
-    blurb: "Real-time SwitchBot device status via AWS IoT Core MQTT",
+    blurb: "Real-time SwitchBot device status",
     aliases: ["switchbot"],
   },
   capabilities: {

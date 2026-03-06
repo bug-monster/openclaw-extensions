@@ -8,7 +8,7 @@ import type { SwitchbotPluginModule } from "./src/types";
 const plugin: SwitchbotPluginModule = {
   id: "switchbot-channel",
   name: "SwitchBot Channel",
-  description: "SwitchBot IoT device channel via AWS IoT Core MQTT streaming",
+  description: "SwitchBot IoT device channel",
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi): void {
     setSwitchBotRuntime(api.runtime);

@@ -1,6 +1,6 @@
 {
-  "name": "@openclaw/switchbot-channel",
-  "version": "0.1.0",
+  "name": "@linchengyu-org/switchbot-channel",
+  "version": "0.1.1",
   "description": "SwitchBot channel plugin for OpenClaw — real-time device status via AWS IoT Core",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,7 +23,7 @@
       "selectionLabel": "SwitchBot (Smart Home)",
       "docsPath": "/channels/switchbot",
       "docsLabel": "switchbot",
-      "blurb": "Real-time SwitchBot device status via AWS IoT Core MQTT",
+      "blurb": "Real-time SwitchBot device status",
       "order": 85,
       "aliases": [
         "switchbot"
@@ -63,7 +63,11 @@
   "license": "MIT",
   "files": [
     "dist/",
-    "README.md"
+    "README.md",
+    "openclaw.plugin.json",
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json"
   ],
   "repository": {
     "type": "git",

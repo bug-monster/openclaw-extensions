@@ -16,13 +16,13 @@
 
 ## 📖 Project Overview
 
-SwitchBot Channel is an official channel plugin for the OpenClaw platform that receives real-time SwitchBot device status changes via AWS IoT Core MQTT protocol. Whether it's contact sensors, temperature/humidity meters, or smart plugs, you can monitor device status in real-time through OpenClaw and set up intelligent notifications.
+SwitchBot Channel is an official channel plugin for the OpenClaw platform that receives real-time SwitchBot device status changes via MQTT protocol. Whether it's contact sensors, temperature/humidity meters, or smart plugs, you can monitor device status in real-time through OpenClaw and set up intelligent notifications.
 
 ## ✨ Features
 
-- 🔄 **Real-time Sync**: Receive device status via AWS IoT Core MQTT in real-time
+- 🔄 **Real-time Sync**: Receive device status via MQTT in real-time
 - 🏠 **Device Compatibility**: Support for all mainstream SwitchBot devices
-- 🔑 **Auto Authentication**: Intelligent AWS IoT credential management with auto-renewal
+- 🔑 **Auto Authentication**: Intelligent credential management with auto-renewal
 - 🚨 **Smart Notifications**: Send notifications only for important events to avoid interruptions
 - 🔧 **Zero Configuration**: Out-of-the-box functionality with just SwitchBot Token and Secret
 - 📊 **History Records**: Local storage of device status history
@@ -182,13 +182,13 @@ openclaw gateway start
 
 ## 📖 项目简介
 
-SwitchBot Channel 是 OpenClaw 平台的官方渠道插件，通过 AWS IoT Core MQTT 协议实时接收 SwitchBot 设备状态变化。无论是门窗传感器、温湿度计还是智能插座，您都可以在 OpenClaw 中实时了解设备状态，并设置智能通知。
+SwitchBot Channel 是 OpenClaw 平台的官方渠道插件，通过 MQTT 协议实时接收 SwitchBot 设备状态变化。无论是门窗传感器、温湿度计还是智能插座，您都可以在 OpenClaw 中实时了解设备状态，并设置智能通知。
 
 ## ✨ 功能特性
 
-- 🔄 **实时同步**：通过 AWS IoT Core MQTT 实时接收设备状态
+- 🔄 **实时同步**：通过 MQTT 实时接收设备状态
 - 🏠 **设备兼容**：支持所有主流 SwitchBot 设备
-- 🔑 **自动认证**：智能管理 AWS IoT 凭证，自动续期
+- 🔑 **自动认证**：智能管理凭证，自动续期
 - 🚨 **智能通知**：仅在重要事件时发送通知，避免打扰
 - 🔧 **零配置**：开箱即用，只需 SwitchBot Token 和 Secret
 - 📊 **历史记录**：本地存储设备状态历史

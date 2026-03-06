@@ -85,12 +85,9 @@ export class CredentialService {
       throw new Error(`Credential fetch failed: ${data.message}`);
     }
 
-    // 兼容两种 API 响应格式：
-    // 格式A (三层): { statusCode, body: { statusCode, body: { channels: { mqtt } } } }
-    // 格式B (两层): { statusCode, body: { channels: { mqtt } } }
+    // API 响应格式：{ statusCode, body: { channels: { mqtt } } }
     const outerBody = data.body;
-    const mqttConfig = outerBody?.body?.channels?.mqtt  // 格式A
-                    || outerBody?.channels?.mqtt;         // 格式B
+    const mqttConfig = outerBody?.channels?.mqtt;
 
     if (!mqttConfig) {
       throw new Error('MQTT config not found in credential response');

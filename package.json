@@ -1,6 +1,6 @@
 {
   "name": "@linchengyu-org/switchbot-channel",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "SwitchBot channel plugin for OpenClaw — real-time device status via AWS IoT Core",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -69,8 +69,9 @@ Edit OpenClaw configuration file `~/.openclaw/openclaw.json`:
 ```json
 {
   "plugins": {
-    "enabled": true,
-    "allow": ["switchbot"]
+    "switchbot": {
+      "enabled": true
+    }
   },
   "channels": {
     "switchbot": {
@@ -235,8 +236,9 @@ openclaw plugins list
 ```json
 {
   "plugins": {
-    "enabled": true,
-    "allow": ["switchbot"]
+     "switchbot": {
+        "enabled": true
+     }
   },
   "channels": {
     "switchbot": {

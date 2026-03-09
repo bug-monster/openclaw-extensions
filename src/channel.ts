@@ -75,12 +75,22 @@ class SwitchBotChannel {
     try {
       console.log('[SwitchBot Channel] Starting...');
 
+      // Generate unique instance ID (12 characters: numbers + uppercase + lowercase)
+      const generateInstanceId = (): string => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < 12; i++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+      };
+
       // Initialize credential service - use timed renewal instead of expiration-based renewal
       this.credentialService = new CredentialService(
         this.config.token,
         this.config.secret,
         this.config.credentialEndpoint || 'https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential',
-        'openclaw-instance',
+        generateInstanceId(),
         this.config.renewBeforeMs || 3600000, // Default 1 hour renewal interval
         this.onCredentialsRenewed.bind(this)
       );

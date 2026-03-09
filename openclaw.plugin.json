@@ -35,8 +35,7 @@
         "type": "string",
         "description": "SwitchBot API secret from developer settings"
       }
-    },
-    "required": []
+    }
   },
   "uiHints": {
     "token": { "label": "API Token", "placeholder": "从 SwitchBot App 开发者设置获取", "sensitive": true },

@@ -162,7 +162,7 @@ export class DeviceStore {
         if (ctx.nightStatus === 'off') parts.push('night light off');
         else parts.push(`night light ${ctx.nightStatus}`);
       }
-      if (typeof ctx.brightness === 'number') parts.push(`brightness ${ctx.brightness}%`);
+      if (ctx.brightness !== undefined) parts.push(`brightness ${ctx.brightness}%`);
       if (ctx.color !== undefined) parts.push(`color ${ctx.color}`);
       if (ctx.colorTemperature !== undefined) parts.push(`color temp ${ctx.colorTemperature}K`);
       if (ctx.workingStatus !== undefined) parts.push(`status ${ctx.workingStatus}`);

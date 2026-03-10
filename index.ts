@@ -1,5 +1,4 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 import { switchbotPlugin } from "./src/channel";
 import { setSwitchBotRuntime } from "./src/runtime";
 import { getDeviceStore } from "./src/device-store";
@@ -9,7 +8,19 @@ const plugin: SwitchbotPluginModule = {
   id: "switchbot-channel",
   name: "SwitchBot Channel",
   description: "SwitchBot IoT device channel",
-  configSchema: emptyPluginConfigSchema(),
+  configSchema: {
+    type: 'object',
+    properties: {
+      token: {
+        type: 'string',
+        description: 'SwitchBot API token from developer settings',
+      },
+      secret: {
+        type: 'string',
+        description: 'SwitchBot API secret from developer settings',
+      },
+    },
+  },
   register(api: OpenClawPluginApi): void {
     setSwitchBotRuntime(api.runtime);
     api.registerChannel({ plugin: switchbotPlugin });

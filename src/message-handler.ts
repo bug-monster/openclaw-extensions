@@ -32,7 +32,7 @@ function extractDeviceId(topic: string): string {
 
 function formatEventText(event: SwitchBotDeviceEvent): string {
   const ctx = event.context;
-  const deviceType = getDeviceTypeName(ctx.deviceType);
+  const deviceType = ctx.deviceType;
 
   const statusParts: string[] = [];
 
@@ -94,7 +94,7 @@ function formatEventText(event: SwitchBotDeviceEvent): string {
     statusParts.push(`Brightness ${ctx.brightness === 'bright' ? 'Bright' : 'Dim'}`);
   }
 
-  // Light brightness level
+  // Light brightness level (legacy)
   if (ctx.brightnessLevel !== undefined) {
     statusParts.push(`Brightness ${ctx.brightnessLevel}%`);
   }
@@ -104,45 +104,6 @@ function formatEventText(event: SwitchBotDeviceEvent): string {
   }
 
   return `📱 ${deviceType}: ${statusParts.join(', ')}`;
-}
-
-function getDeviceTypeName(deviceType: string): string {
-  const typeMap: Record<string, string> = {
-    'WoContact': 'Contact Sensor',
-    'WoMeterPro': 'Meter Pro',
-    'WoCurtain3': 'Curtain Controller',
-    'WoPlug': 'Smart Plug',
-    'WoBulb': 'Smart Bulb',
-    'WoLock': 'Smart Lock',
-    'WoMotion': 'Motion Sensor',
-    'WoMeter': 'Meter',
-    'WoPresence': 'Presence Sensor',
-    'WoHub2': 'Hub 2',
-    'WoIOSensor': 'IO Sensor',
-    // English names used in actual push notifications
-    'Motion Sensor': 'Motion Sensor',
-    'Contact Sensor': 'Contact Sensor',
-    'Meter': 'Meter',
-    'Meter Plus': 'Meter Plus',
-    'Meter Pro': 'Meter Pro',
-    'Curtain': 'Curtain',
-    'Curtain 3': 'Curtain 3',
-    'Plug Mini (US)': 'Smart Plug',
-    'Plug Mini (JP)': 'Smart Plug',
-    'Smart Lock': 'Smart Lock',
-    'Smart Lock Pro': 'Smart Lock Pro',
-    'Hub 2': 'Hub 2',
-    'Hub Mini': 'Hub Mini',
-    'Bot': 'Bot',
-    'Color Bulb': 'Color Bulb',
-    'LED Strip Light': 'LED Strip Light',
-    'Ceiling Light': 'Ceiling Light',
-    'Blind Tilt': 'Blind Tilt',
-    'Indoor Cam': 'Indoor Cam',
-    'Pan/Tilt Cam': 'Pan/Tilt Cam',
-  };
-
-  return typeMap[deviceType] || deviceType;
 }
 
 // Validate device event format

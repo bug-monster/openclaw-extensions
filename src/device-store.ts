@@ -115,90 +115,14 @@ export class DeviceStore {
     const devices = this.listDevices();
     if (devices.length === 0) return 'No device data available';
 
-    const lines = devices.map(d => {
+    const result = devices.map(d => {
       const record = this.latest.get(d.deviceMac)!;
-      const ctx = record.context;
       const age = Math.round((Date.now() - d.lastSeen) / 1000);
       const ageStr = age < 60 ? `${age}s ago` : age < 3600 ? `${Math.round(age / 60)}min ago` : `${Math.round(age / 3600)}h ago`;
-
-      const parts: string[] = [];
-
-      if (ctx.onlineStatus !== undefined) parts.push(ctx.onlineStatus === 'online' ? 'online' : 'offline');
-      if (ctx.online !== undefined) parts.push(ctx.online ? 'online' : 'offline');
-      if (ctx.battery !== undefined) parts.push(`battery ${ctx.battery}%`);
-      if (ctx.temperature !== undefined) parts.push(`temp ${ctx.temperature}°C`);
-      if (ctx.humidity !== undefined) parts.push(`humidity ${ctx.humidity}%`);
-      if (ctx.CO2 !== undefined) parts.push(`CO2 ${ctx.CO2}ppm`);
-      if (ctx.lightLevel !== undefined) parts.push(`light ${ctx.lightLevel}`);
-      if (ctx.brightness && typeof ctx.brightness === 'string') parts.push(`brightness ${ctx.brightness}`);
-      if (ctx.detectionState !== undefined) parts.push(ctx.detectionState === 'DETECTED' ? 'motion detected' : 'no motion');
-      if (ctx.press !== undefined && ctx.press) parts.push('pressed');
-      if (ctx.power !== undefined) parts.push(ctx.power === 'on' ? 'on' : 'off');
-      if (ctx.powerState !== undefined) parts.push(ctx.powerState === 'ON' ? 'on' : 'off');
-      if (ctx.openState !== undefined) {
-        if (ctx.openState === 'open') parts.push('open');
-        else if (ctx.openState === 'close') parts.push('closed');
-        else if (ctx.openState === 'timeOutNotClose') parts.push('timeout not closed');
-      }
-      if (ctx.doorMode !== undefined) parts.push(ctx.doorMode === 'IN_DOOR' ? 'indoor' : 'outdoor');
-      if (ctx.switchStatus !== undefined) parts.push(`switch ${ctx.switchStatus}`);
-      if (ctx.switch1Status !== undefined) parts.push(`switch1 ${ctx.switch1Status}`);
-      if (ctx.switch2Status !== undefined) parts.push(`switch2 ${ctx.switch2Status}`);
-      if (ctx.lockState !== undefined) {
-        if (ctx.lockState === 'LOCKED') parts.push('locked');
-        else if (ctx.lockState === 'UNLOCKED') parts.push('unlocked');
-        else if (ctx.lockState === 'JAMMED') parts.push('jammed');
-      }
-      if (ctx.slidePosition !== undefined) parts.push(`position ${ctx.slidePosition}%`);
-      if (ctx.position !== undefined) parts.push(`position ${ctx.position}%`);
-      if (ctx.calibrate !== undefined) parts.push(ctx.calibrate ? 'calibrated' : 'not calibrated');
-      if (ctx.group !== undefined && ctx.group) parts.push('grouped');
-      if (ctx.fanSpeed !== undefined) parts.push(`fan speed ${ctx.fanSpeed}`);
-      if (ctx.mode !== undefined) {
-        const modeMap: Record<number, string> = {
-          0: 'preset',     // 设定值
-          1: 'high',       // 强档模式
-          2: 'medium',     // 中档模式
-          3: 'low',        // 弱档模式
-          4: 'silent',     // 静音模式
-          5: 'constant',   // 恒湿模式
-          6: 'sleep',      // 睡眠模式
-          7: 'auto',       // 自动模式
-          8: 'drying'      // 风干状态
-        };
-        const modeValue = typeof ctx.mode === 'number' ? ctx.mode : Number(ctx.mode);
-        const modeText = modeMap[modeValue] || `mode${ctx.mode}`;
-        parts.push(`mode ${modeText}`);
-      }
-      if (ctx.oscillation !== undefined) parts.push(ctx.oscillation === 'on' ? 'oscillating' : 'not oscillating');
-      if (ctx.verticalOscillation !== undefined) parts.push(ctx.verticalOscillation === 'on' ? 'vertical oscillating' : 'not vertical oscillating');
-      if (ctx.chargingStatus !== undefined) parts.push(ctx.chargingStatus === 'charging' ? 'charging' : 'not charging');
-      if (ctx.nightStatus !== undefined) {
-        if (ctx.nightStatus === 'off') parts.push('night light off');
-        else parts.push(`night light ${ctx.nightStatus}`);
-      }
-      if (ctx.brightness !== undefined) parts.push(`brightness ${ctx.brightness}%`);
-      if (ctx.color !== undefined) parts.push(`color ${ctx.color}`);
-      if (ctx.colorTemperature !== undefined) parts.push(`color temp ${ctx.colorTemperature}K`);
-      if (ctx.workingStatus !== undefined) parts.push(`status ${ctx.workingStatus}`);
-      if (ctx.taskType !== undefined) parts.push(`task ${ctx.taskType}`);
-      if (ctx.waterBaseBattery !== undefined) parts.push(`water base ${ctx.waterBaseBattery}%`);
-      if (ctx.drying !== undefined && ctx.drying) parts.push('drying');
-      if (ctx.fanGear !== undefined) parts.push(`fan gear ${ctx.fanGear}`);
-      if (ctx.childLock !== undefined && ctx.childLock) parts.push('child lock on');
-      if (ctx.overload !== undefined && ctx.overload) parts.push('overloaded');
-      if (ctx.switch1Overload !== undefined && ctx.switch1Overload) parts.push('switch1 overloaded');
-      if (ctx.switch2Overload !== undefined && ctx.switch2Overload) parts.push('switch2 overloaded');
-      if (ctx.overTemperature !== undefined && ctx.overTemperature) parts.push('over temperature');
-      if (ctx.isStuck !== undefined && ctx.isStuck) parts.push('stuck');
-      if (ctx.deviceMode !== undefined) parts.push(`device mode ${ctx.deviceMode}`);
-      if (ctx.displayMode !== undefined) parts.push(`display mode ${ctx.displayMode}`);
-      if (ctx.doorStatus !== undefined) parts.push(`door status ${ctx.doorStatus}`);
-
-      return `- ${d.deviceType} (${d.deviceMac}): ${parts.join(', ') || 'status updated'} [${ageStr}]`;
+      const { deviceMac, deviceType, timeOfSample, ...status } = record.context as Record<string, unknown>;
+      return `- ${d.deviceType} (${d.deviceMac}) [${ageStr}]: ${JSON.stringify(status)}`;
     });
-
-    return `SwitchBot device status (${devices.length} devices):\n${lines.join('\n')}`;
+    return `SwitchBot devices (${devices.length}):\n${result.join('\n')}`;
   }
 
   /**

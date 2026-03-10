@@ -154,7 +154,22 @@ export class DeviceStore {
       if (ctx.calibrate !== undefined) parts.push(ctx.calibrate ? 'calibrated' : 'not calibrated');
       if (ctx.group !== undefined && ctx.group) parts.push('grouped');
       if (ctx.fanSpeed !== undefined) parts.push(`fan speed ${ctx.fanSpeed}`);
-      if (ctx.mode !== undefined) parts.push(`mode ${ctx.mode}`);
+      if (ctx.mode !== undefined) {
+        const modeMap: Record<number, string> = {
+          0: 'preset',     // 设定值
+          1: 'high',       // 强档模式
+          2: 'medium',     // 中档模式
+          3: 'low',        // 弱档模式
+          4: 'silent',     // 静音模式
+          5: 'constant',   // 恒湿模式
+          6: 'sleep',      // 睡眠模式
+          7: 'auto',       // 自动模式
+          8: 'drying'      // 风干状态
+        };
+        const modeValue = typeof ctx.mode === 'number' ? ctx.mode : Number(ctx.mode);
+        const modeText = modeMap[modeValue] || `mode${ctx.mode}`;
+        parts.push(`mode ${modeText}`);
+      }
       if (ctx.oscillation !== undefined) parts.push(ctx.oscillation === 'on' ? 'oscillating' : 'not oscillating');
       if (ctx.verticalOscillation !== undefined) parts.push(ctx.verticalOscillation === 'on' ? 'vertical oscillating' : 'not vertical oscillating');
       if (ctx.chargingStatus !== undefined) parts.push(ctx.chargingStatus === 'charging' ? 'charging' : 'not charging');

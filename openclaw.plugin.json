@@ -2,7 +2,7 @@
   "id": "switchbot-channel",
   "channels": ["switchbot"],
   "name": "SwitchBot",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "SwitchBot channel plugin for OpenClaw — real-time device status",
   "author": "SwitchBot Team",
   "license": "MIT",

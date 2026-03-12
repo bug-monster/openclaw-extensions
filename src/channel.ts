@@ -94,7 +94,7 @@ class SwitchBotChannel {
       this.credentialService = new CredentialService(
         this.config.token,
         this.config.secret,
-        this.config.credentialEndpoint || 'https://oqwck99em8.execute-api.us-east-1.amazonaws.com/open/v1.1/iot/credential',
+        this.config.credentialEndpoint,
         generateInstanceId(),
         this.config.renewBeforeMs || 3600000, // Default 1 hour renewal interval
         this.onCredentialsRenewed.bind(this)
@@ -227,12 +227,12 @@ class SwitchBotChannel {
 
       console.log(`[SwitchBot Channel] Device status stored: ${deviceEvent.context.deviceType} (${deviceEvent.context.deviceMac})`);
 
-      // Check if this device should be monitored and pushed to chat
-      const monitorIds = this.config.monitorDeviceIds || [];
-      if (monitorIds.length > 0) {
-        const deviceId = deviceEvent.context.deviceMac;
-        const isMonitored = monitorIds.some(
-          (id: string) => id.toLowerCase() === deviceId.toLowerCase()
+      // Check if this device type should be monitored and pushed to chat
+      const monitorMacs = this.config.monitorDeviceMacs || [];
+      if (monitorMacs.length > 0) {
+        const deviceMac = deviceEvent.context.deviceMac;
+        const isMonitored = monitorMacs.some(
+          (t: string) => t.toLowerCase() === deviceMac.toLowerCase()
         );
 
         if (isMonitored) {
@@ -255,7 +255,7 @@ class SwitchBotChannel {
   private async pushDeviceEventToChat(event: SwitchBotDeviceEvent): Promise<void> {
     try {
       const runtime = getSwitchBotRuntime() as any;
-      
+
       if (!runtime?.channel?.reply?.dispatchReplyWithBufferedBlockDispatcher) {
         console.warn('[SwitchBot Channel] runtime.channel.reply not available');
         return;
@@ -265,25 +265,24 @@ class SwitchBotChannel {
       const timestamp = new Date(ctx.timeOfSample || Date.now()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 
       const messageBody = [
-        `[SwitchBot Device Real-time Notification]`,
-        `Time: ${timestamp}`,
-        `Device Type: ${ctx.deviceType}`,
-        `Device MAC: ${ctx.deviceMac}`,
-        `Status: ${JSON.stringify(ctx)}`,
+        `[SwitchBot 设备实时通知]`,
+        `时间: ${timestamp}`,
+        `设备类型: ${ctx.deviceType}`,
+        `设备MAC: ${ctx.deviceMac}`,
+        `状态: ${JSON.stringify(ctx)}`,
         ``,
-        `Analyze this smart home device status change and describe it in clear, concise language. If it's an anomaly (e.g., door/window long unclosed, motion detected at unusual times), please alert specifically.`,
+        `请分析这条智能家居设备状态变化，用简洁自然的语言告知我发生了什么。如果是异常情况（如门窗长时间未关、异常时间段的运动检测等），请特别提醒。`,
       ].join('\n');
 
       // Build inbound context using OpenClaw's standard format
-      // Each device (deviceMac) gets its own isolated session to prevent unbounded context growth
       const inboundContext = runtime.channel.reply.finalizeInboundContext({
         Body: messageBody,
         RawBody: messageBody,
         CommandBody: messageBody,
         CommandAuthorized: true,
-        From: ctx.deviceMac,
-        To: ctx.deviceMac,
-        SessionKey: `agent:main:switchbot:${ctx.deviceMac}`,  // Unique session per device
+        From: `${ctx.deviceType}:${ctx.deviceMac}`,
+        To: `${ctx.deviceType}:${ctx.deviceMac}`,
+        SessionKey: `agent:main:switchbot:${ctx.deviceMac}`,
         AccountId: 'default',
         ChatType: 'direct',
         ConversationLabel: `switchbot/${ctx.deviceType}/${ctx.deviceMac}`,
@@ -491,7 +490,7 @@ export const switchbotPlugin = {
     deliveryMode: 'gateway' as const,
     async sendText({ text }: { text: string; cfg?: any }) {
       console.log('[SwitchBot Channel] sendText called:', text.slice(0, 100));
-      return { 
+      return {
         ok: true,
         channel: 'switchbot',
         messageId: `switchbot-${Date.now()}`
@@ -549,10 +548,10 @@ export const switchbotPlugin = {
           type: 'string',
           description: 'SwitchBot API secret from developer settings'
         },
-        monitorDeviceIds: {
+        monitorDeviceMacs: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Device IDs (MAC addresses) to monitor in real-time. When MQTT receives events from these devices, the message will be analyzed by the LLM and displayed in chat.'
+          description: 'Device macs to monitor in real-time.'
         }
       },
       required: []

@@ -3,7 +3,10 @@ import { CredentialService, MqttCredential } from './credential';
 import { createMqttTlsClient } from './mqtt-client';
 import { validateDeviceEvent } from './message-handler';
 import { getDeviceStore, destroyDeviceStore } from './device-store';
+import { getSwitchBotRuntime } from './runtime';
 import { SwitchBotDeviceEvent } from './types';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Extract SwitchBot configuration from various configuration structures
@@ -201,7 +204,7 @@ class SwitchBotChannel {
   }
 
   /**
-   * Handle device message — store locally, don't push
+   * Handle device message — store locally, and push to chat if device type is monitored
    */
   private handleDeviceMessage(topic: string, payload: Buffer): void {
     try {
@@ -221,9 +224,183 @@ class SwitchBotChannel {
       });
 
       console.log(`[SwitchBot Channel] Device status stored: ${deviceEvent.context.deviceType} (${deviceEvent.context.deviceMac})`);
+
+      // Check if this device type should be monitored and pushed to chat
+      const monitorTypes = this.config.monitorDeviceTypes || [];
+      if (monitorTypes.length > 0) {
+        const deviceType = deviceEvent.context.deviceType;
+        const isMonitored = monitorTypes.some(
+          (t: string) => t.toLowerCase() === deviceType.toLowerCase()
+        );
+
+        if (isMonitored) {
+          this.pushDeviceEventToChat(deviceEvent);
+        }
+      }
     } catch (error) {
       console.error('[SwitchBot Channel] Failed to process device message:', error);
     }
+  }
+
+  /**
+   * Push device event to chat via system event + heartbeat wake
+   * The LLM will analyze the event and present it in a human-friendly way
+   */
+  private async pushDeviceEventToChat(event: SwitchBotDeviceEvent): Promise<void> {
+    try {
+      const runtime = getSwitchBotRuntime() as any;
+      if (!runtime?.system?.enqueueSystemEvent || !runtime?.system?.requestHeartbeatNow) {
+        console.warn('[SwitchBot Channel] Runtime system APIs not available, cannot push to chat');
+        return;
+      }
+
+      const ctx = event.context;
+      const eventText = event.context;
+      const timestamp = new Date(ctx.timeOfSample || Date.now()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+
+      // Extract image URLs from the event context
+      const imageUrls = this.extractImageUrls(ctx);
+      let imageInfo = '';
+
+      if (imageUrls.length > 0) {
+        // Download images and save locally
+        const savedImages = await this.downloadEventImages(imageUrls, ctx.deviceMac, ctx.timeOfSample || Date.now());
+        if (savedImages.length > 0) {
+          imageInfo = `\n图片:\n${savedImages.map(img => `- ![${img.label}](${img.localPath})`).join('\n')}`;
+        }
+      }
+
+      const systemEventText = [
+        `[SwitchBot 设备实时通知]`,
+        `时间: ${timestamp}`,
+        `设备类型: ${ctx.deviceType}`,
+        `设备MAC: ${ctx.deviceMac}`,
+        `状态摘要: ${eventText}`,
+        `原始数据: ${JSON.stringify(ctx)}`,
+        imageInfo,
+        ``,
+        `请分析这条智能家居设备状态变化，用简洁自然的语言告知用户发生了什么。${imageUrls.length > 0 ? '消息中包含了设备拍摄的图片，请在回复中用 markdown 图片语法展示给用户。' : ''}如果是异常情况（如门窗长时间未关、异常时间段的运动检测等），请特别提醒。`,
+      ].join('\n');
+
+      // Use "main" as the default session key for the main chat session
+      const sessionKey = 'main';
+      const enqueued = runtime.system.enqueueSystemEvent(systemEventText, { sessionKey, contextKey: `switchbot:${ctx.deviceMac}:${ctx.timeOfSample}` });
+
+      if (enqueued) {
+        runtime.system.requestHeartbeatNow({ reason: `SwitchBot device event: ${ctx.deviceType} (${ctx.deviceMac})`, sessionKey });
+        console.log(`[SwitchBot Channel] Pushed device event to chat: ${ctx.deviceType} (${ctx.deviceMac})${imageUrls.length > 0 ? ` with ${imageUrls.length} image(s)` : ''}`);
+      } else {
+        console.log(`[SwitchBot Channel] System event not enqueued (duplicate context key): ${ctx.deviceType} (${ctx.deviceMac})`);
+      }
+    } catch (error) {
+      console.error('[SwitchBot Channel] Failed to push device event to chat:', error);
+    }
+  }
+
+  /**
+   * Extract image URLs from event context
+   * SwitchBot camera/doorbell events may include image URLs in various fields
+   */
+  private extractImageUrls(ctx: Record<string, unknown>): Array<{ url: string; label: string }> {
+    const images: Array<{ url: string; label: string }> = [];
+
+    // Known image fields
+    const imageFields: Array<{ key: string; label: string }> = [
+      { key: 'imageUrl', label: '设备快照' },
+      { key: 'detectionUrl', label: '检测事件图片' },
+      { key: 'thumbnailUrl', label: '缩略图' },
+      { key: 'imgUrl', label: '图片' },
+      { key: 'photoUrl', label: '照片' },
+      { key: 'snapshotUrl', label: '快照' },
+      { key: 'picUrl', label: '图片' },
+      { key: 'image', label: '图片' },
+      { key: 'snapshot', label: '快照' },
+      { key: 'url', label: '链接图片' },
+    ];
+
+    for (const { key, label } of imageFields) {
+      const val = ctx[key];
+      if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))) {
+        // Check if it looks like an image URL
+        if (/\.(jpg|jpeg|png|gif|webp|bmp)/i.test(val) || val.includes('image') || val.includes('snapshot') || val.includes('photo') || val.includes('pic')) {
+          images.push({ url: val, label });
+        } else {
+          // Could still be an image URL without extension (e.g. CDN URLs)
+          images.push({ url: val, label });
+        }
+      }
+    }
+
+    // Also scan all string values for URLs that look like images (fallback)
+    for (const [key, val] of Object.entries(ctx)) {
+      if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))
+        && !imageFields.some(f => f.key === key)
+        && /\.(jpg|jpeg|png|gif|webp|bmp)/i.test(val)) {
+        images.push({ url: val, label: key });
+      }
+    }
+
+    return images;
+  }
+
+  /**
+   * Download event images to local storage
+   */
+  private async downloadEventImages(
+    images: Array<{ url: string; label: string }>,
+    deviceMac: string,
+    timestamp: number
+  ): Promise<Array<{ label: string; localPath: string; originalUrl: string }>> {
+    const imageDir = path.join(process.env.HOME || '/tmp', '.openclaw', 'switchbot-data', 'images');
+    fs.mkdirSync(imageDir, { recursive: true });
+
+    const results: Array<{ label: string; localPath: string; originalUrl: string }> = [];
+
+    for (const img of images) {
+      try {
+        const response = await fetch(img.url, { signal: AbortSignal.timeout(10000) });
+        if (!response.ok) {
+          console.warn(`[SwitchBot Channel] Failed to download image: ${response.status} ${img.url}`);
+          // Still include the original URL as fallback
+          results.push({ label: img.label, localPath: img.url, originalUrl: img.url });
+          continue;
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const ext = this.guessImageExtension(response.headers.get('content-type'), img.url);
+        const filename = `${deviceMac}_${timestamp}_${img.label.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, '_')}${ext}`;
+        const localPath = path.join(imageDir, filename);
+
+        fs.writeFileSync(localPath, buffer);
+        console.log(`[SwitchBot Channel] Image saved: ${localPath} (${buffer.length} bytes)`);
+        results.push({ label: img.label, localPath, originalUrl: img.url });
+      } catch (error) {
+        console.warn(`[SwitchBot Channel] Failed to download image ${img.url}:`, error);
+        // Fallback to original URL
+        results.push({ label: img.label, localPath: img.url, originalUrl: img.url });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Guess image file extension from content-type or URL
+   */
+  private guessImageExtension(contentType: string | null, url: string): string {
+    if (contentType) {
+      const map: Record<string, string> = {
+        'image/jpeg': '.jpg',
+        'image/png': '.png',
+        'image/gif': '.gif',
+        'image/webp': '.webp',
+        'image/bmp': '.bmp',
+      };
+      if (map[contentType]) return map[contentType];
+    }
+    const urlMatch = url.match(/\.(jpg|jpeg|png|gif|webp|bmp)/i);
+    if (urlMatch) return `.${urlMatch[1].toLowerCase()}`;
+    return '.jpg'; // default
   }
 
   /**

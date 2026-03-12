@@ -57,6 +57,11 @@ export interface SwitchBotDeviceEvent {
     windDirection?: number;      // degrees
     rainRate?: number;           // mm/h
 
+    // Camera / Doorbell image
+    imageUrl?: string;           // Snapshot image URL from camera/doorbell events
+    detectionUrl?: string;       // Detection event image URL
+    thumbnailUrl?: string;       // Thumbnail URL
+
     /** Fallback: unlisted fields */
     [key: string]: unknown;
   };

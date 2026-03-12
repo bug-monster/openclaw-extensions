@@ -19,6 +19,11 @@ const plugin: SwitchbotPluginModule = {
         type: 'string',
         description: 'SwitchBot API secret from developer settings',
       },
+      monitorDeviceTypes: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Device types to monitor in real-time and push to chat via LLM analysis',
+      },
     },
   },
   register(api: OpenClawPluginApi): void {

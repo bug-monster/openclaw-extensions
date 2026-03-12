@@ -30,7 +30,7 @@ function extractDeviceId(topic: string): string {
   return parts[1] || 'unknown';
 }
 
-function formatEventText(event: SwitchBotDeviceEvent): string {
+export function formatEventText(event: SwitchBotDeviceEvent): string {
   const ctx = event.context;
   const deviceType = ctx.deviceType;
 

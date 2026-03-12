@@ -53,11 +53,13 @@ class SwitchBotChannel {
   private credentialService: CredentialService | null = null;
   private mqttClient: any = null;
   private config: SwitchBotConfig;
+  private globalConfig: any = null;
   private isStarted = false;
 
   constructor(config: any, globalConfig?: any) {
     const channelConfig = extractSwitchBotConfig(config, globalConfig);
     this.config = validateConfig(channelConfig);
+    this.globalConfig = globalConfig;
   }
 
   /**
@@ -225,12 +227,12 @@ class SwitchBotChannel {
 
       console.log(`[SwitchBot Channel] Device status stored: ${deviceEvent.context.deviceType} (${deviceEvent.context.deviceMac})`);
 
-      // Check if this device type should be monitored and pushed to chat
-      const monitorTypes = this.config.monitorDeviceTypes || [];
-      if (monitorTypes.length > 0) {
-        const deviceType = deviceEvent.context.deviceType;
-        const isMonitored = monitorTypes.some(
-          (t: string) => t.toLowerCase() === deviceType.toLowerCase()
+      // Check if this device should be monitored and pushed to chat
+      const monitorIds = this.config.monitorDeviceIds || [];
+      if (monitorIds.length > 0) {
+        const deviceId = deviceEvent.context.deviceMac;
+        const isMonitored = monitorIds.some(
+          (id: string) => id.toLowerCase() === deviceId.toLowerCase()
         );
 
         if (isMonitored) {
@@ -246,54 +248,81 @@ class SwitchBotChannel {
    * Push device event to chat via system event + heartbeat wake
    * The LLM will analyze the event and present it in a human-friendly way
    */
+  /**
+   * Push device event to chat using official channel reply dispatch
+   * Now that we have outbound: true, replies will be delivered properly
+   */
   private async pushDeviceEventToChat(event: SwitchBotDeviceEvent): Promise<void> {
     try {
       const runtime = getSwitchBotRuntime() as any;
-      if (!runtime?.system?.enqueueSystemEvent || !runtime?.system?.requestHeartbeatNow) {
-        console.warn('[SwitchBot Channel] Runtime system APIs not available, cannot push to chat');
+      
+      if (!runtime?.channel?.reply?.dispatchReplyWithBufferedBlockDispatcher) {
+        console.warn('[SwitchBot Channel] runtime.channel.reply not available');
         return;
       }
 
       const ctx = event.context;
-      const eventText = event.context;
       const timestamp = new Date(ctx.timeOfSample || Date.now()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 
-      // Extract image URLs from the event context
-      const imageUrls = this.extractImageUrls(ctx);
-      let imageInfo = '';
-
-      if (imageUrls.length > 0) {
-        // Download images and save locally
-        const savedImages = await this.downloadEventImages(imageUrls, ctx.deviceMac, ctx.timeOfSample || Date.now());
-        if (savedImages.length > 0) {
-          imageInfo = `\n图片:\n${savedImages.map(img => `- ![${img.label}](${img.localPath})`).join('\n')}`;
-        }
-      }
-
-      const systemEventText = [
-        `[SwitchBot 设备实时通知]`,
-        `时间: ${timestamp}`,
-        `设备类型: ${ctx.deviceType}`,
-        `设备MAC: ${ctx.deviceMac}`,
-        `状态摘要: ${eventText}`,
-        `原始数据: ${JSON.stringify(ctx)}`,
-        imageInfo,
+      const messageBody = [
+        `[SwitchBot Device Real-time Notification]`,
+        `Time: ${timestamp}`,
+        `Device Type: ${ctx.deviceType}`,
+        `Device MAC: ${ctx.deviceMac}`,
+        `Status: ${JSON.stringify(ctx)}`,
         ``,
-        `请分析这条智能家居设备状态变化，用简洁自然的语言告知用户发生了什么。${imageUrls.length > 0 ? '消息中包含了设备拍摄的图片，请在回复中用 markdown 图片语法展示给用户。' : ''}如果是异常情况（如门窗长时间未关、异常时间段的运动检测等），请特别提醒。`,
+        `Analyze this smart home device status change and describe it in clear, concise language. If it's an anomaly (e.g., door/window long unclosed, motion detected at unusual times), please alert specifically.`,
       ].join('\n');
 
-      // Use "main" as the default session key for the main chat session
-      const sessionKey = 'main';
-      const enqueued = runtime.system.enqueueSystemEvent(systemEventText, { sessionKey, contextKey: `switchbot:${ctx.deviceMac}:${ctx.timeOfSample}` });
+      // Build inbound context using OpenClaw's standard format
+      // Each device (deviceMac) gets its own isolated session to prevent unbounded context growth
+      const inboundContext = runtime.channel.reply.finalizeInboundContext({
+        Body: messageBody,
+        RawBody: messageBody,
+        CommandBody: messageBody,
+        CommandAuthorized: true,
+        From: ctx.deviceMac,
+        To: ctx.deviceMac,
+        SessionKey: `agent:main:switchbot:${ctx.deviceMac}`,  // Unique session per device
+        AccountId: 'default',
+        ChatType: 'direct',
+        ConversationLabel: `switchbot/${ctx.deviceType}/${ctx.deviceMac}`,
+        SenderName: ctx.deviceType,
+        SenderId: ctx.deviceMac,
+        Provider: 'switchbot',
+        Surface: 'switchbot',
+        MessageSid: `switchbot:${ctx.deviceMac}:${ctx.timeOfSample}`,
+        Timestamp: ctx.timeOfSample || Date.now(),
+      });
 
-      if (enqueued) {
-        runtime.system.requestHeartbeatNow({ reason: `SwitchBot device event: ${ctx.deviceType} (${ctx.deviceMac})`, sessionKey });
-        console.log(`[SwitchBot Channel] Pushed device event to chat: ${ctx.deviceType} (${ctx.deviceMac})${imageUrls.length > 0 ? ` with ${imageUrls.length} image(s)` : ''}`);
-      } else {
-        console.log(`[SwitchBot Channel] System event not enqueued (duplicate context key): ${ctx.deviceType} (${ctx.deviceMac})`);
-      }
+      // Get full config
+      const cfg = this.globalConfig?.cfg || {};
+
+      console.log(`[SwitchBot Channel] Dispatching message for ${ctx.deviceType} (${ctx.deviceMac})`);
+
+      // Dispatch through OpenClaw's reply system
+      // With outbound: true, the replies will be delivered to the channel
+      await runtime.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
+        ctx: inboundContext,
+        cfg,
+        dispatcherOptions: {
+          deliver: async (payload: any, info: any) => {
+            if (payload.text) {
+              console.log(`[SwitchBot Channel] Agent reply (${info.kind}): ${payload.text.slice(0, 150)}`);
+            }
+          },
+          onError: (err: Error, info: any) => {
+            console.error(`[SwitchBot Channel] Reply error (${info.kind}):`, err.message);
+          },
+        },
+        replyOptions: {
+          disableBlockStreaming: true,
+        },
+      });
+
+      console.log(`[SwitchBot Channel] Device event processed: ${ctx.deviceType} (${ctx.deviceMac})`);
     } catch (error) {
-      console.error('[SwitchBot Channel] Failed to push device event to chat:', error);
+      console.error('[SwitchBot Channel] Failed to push device event:', error);
     }
   }
 
@@ -427,8 +456,10 @@ class SwitchBotChannel {
 
 // Factory function to create plugin instance
 function create(config: any, context?: any): SwitchBotChannel {
-  // Pass context to constructor to access global configuration
-  return new SwitchBotChannel(config, context?.globalConfig || context);
+  // Pass context to constructor to access global configuration (runtime, cfg)
+  const globalConfig = context?.globalConfig || context;
+  if (context?.cfg) globalConfig.cfg = context.cfg;
+  return new SwitchBotChannel(config, globalConfig);
 }
 
 // Export according to OpenClaw channel plugin standard
@@ -448,12 +479,24 @@ export const switchbotPlugin = {
     media: false,   // SwitchBot does not support media files
     features: {
       inbound: true,   // Receive SwitchBot device messages
-      outbound: false, // Does not support active sending
+      outbound: true,  // Support pushing notifications to chat
       threading: false,
       reactions: false,
       editing: false,
       deletion: false,
     }
+  },
+  // Outbound message delivery - support sending messages back to chat
+  outbound: {
+    deliveryMode: 'gateway' as const,
+    async sendText({ text }: { text: string; cfg?: any }) {
+      console.log('[SwitchBot Channel] sendText called:', text.slice(0, 100));
+      return { 
+        ok: true,
+        channel: 'switchbot',
+        messageId: `switchbot-${Date.now()}`
+      };
+    },
   },
   config: {
     // Account management
@@ -505,6 +548,11 @@ export const switchbotPlugin = {
         secret: {
           type: 'string',
           description: 'SwitchBot API secret from developer settings'
+        },
+        monitorDeviceIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Device IDs (MAC addresses) to monitor in real-time. When MQTT receives events from these devices, the message will be analyzed by the LLM and displayed in chat.'
         }
       },
       required: []
@@ -522,7 +570,7 @@ export const switchbotPlugin = {
       if (!switchbotConfig?.token || !switchbotConfig?.secret) {
         throw new Error('SwitchBot channel config missing token/secret');
       }
-      const channel = create(switchbotConfig, { runtime });
+      const channel = create(switchbotConfig, { runtime, cfg });
       await channel.start();
 
       // Framework uses Promise.resolve(startAccount()) to track lifecycle.

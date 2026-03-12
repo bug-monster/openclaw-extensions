@@ -8,7 +8,7 @@ const DEFAULT_RENEW_BEFORE_MS = 3600000; // 1 hour renewal
 export const SwitchBotConfig = z.object({
   token: z.string().min(10, 'Token must be at least 10 characters'),
   secret: z.string().min(10, 'Secret must be at least 10 characters'),
-  monitorDeviceTypes: z.array(z.string()).optional().default([]),
+  monitorDeviceMacs: z.array(z.string()).optional().default([]),
 });
 
 export type SwitchBotConfig = z.infer<typeof SwitchBotConfig> & {

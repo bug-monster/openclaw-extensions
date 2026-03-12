@@ -35,17 +35,17 @@
         "type": "string",
         "description": "SwitchBot API secret from developer settings"
       },
-      "monitorDeviceTypes": {
+      "monitorDeviceIds": {
         "type": "array",
         "items": { "type": "string" },
-        "description": "Device types to monitor in real-time. When MQTT receives events from these device types, the message will be analyzed by the LLM and displayed in chat. e.g. [\"Motion Sensor\", \"Contact Sensor\"]"
+        "description": "Device IDs (MAC addresses) to monitor in real-time. When MQTT receives events from these devices, the message will be analyzed by the LLM and displayed in chat. e.g. [\"B0E9FE000915\", \"eb64ab5360bcb1d2c3ewbm\"]"
       }
     }
   },
   "uiHints": {
-    "token": { "label": "API Token", "placeholder": "从 SwitchBot App 开发者设置获取", "sensitive": true },
-    "secret": { "label": "API Secret", "placeholder": "从 SwitchBot App 开发者设置获取", "sensitive": true },
-    "monitorDeviceTypes": { "label": "实时监控设备类型", "placeholder": "选择需要实时推送的设备类型", "tags": ["multiselect"] }
+    "token": { "label": "API Token", "placeholder": "Get from SwitchBot App Developer Settings", "sensitive": true },
+    "secret": { "label": "API Secret", "placeholder": "Get from SwitchBot App Developer Settings", "sensitive": true },
+    "monitorDeviceIds": { "label": "Monitor Device IDs", "placeholder": "Enter device MAC addresses to monitor", "tags": ["multiselect"] }
   },
   "tools": ["switchbot_status"]
 }

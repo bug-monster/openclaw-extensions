@@ -19,10 +19,10 @@ const plugin: SwitchbotPluginModule = {
         type: 'string',
         description: 'SwitchBot API secret from developer settings',
       },
-      monitorDeviceTypes: {
+      monitorDeviceIds: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Device types to monitor in real-time and push to chat via LLM analysis',
+        description: 'Device IDs (MAC addresses) to monitor in real-time and push to chat via LLM analysis',
       },
     },
   },
@@ -30,7 +30,7 @@ const plugin: SwitchbotPluginModule = {
     setSwitchBotRuntime(api.runtime);
     api.registerChannel({ plugin: switchbotPlugin });
 
-    // 注册 agent tool: 查询 SwitchBot 设备状态
+    // Register agent tool: Query SwitchBot device status
     api.registerTool({
       name: 'switchbot_status',
       label: 'SwitchBot Status',
@@ -62,42 +62,42 @@ const plugin: SwitchbotPluginModule = {
           return { details: {}, content: [{ type: 'text', text: summary }] };
         }
 
-        // 按 MAC 查找
+        // Search by MAC address
         let record = store.getLatest(device.toUpperCase());
 
-        // 按设备类型查找
+        // Search by device type
         if (!record) {
           const byType = store.getByType(device);
           if (byType.length > 0) {
             if (history) {
               const hist = store.getHistory(byType[0].deviceMac, limit || 20);
               const lines = hist.map(r => {
-                const ts = new Date(r.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+                const ts = new Date(r.timestamp).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' });
                 return `[${ts}] ${JSON.stringify(r.context)}`;
               });
-              return { details: {}, content: [{ type: 'text', text: `${byType[0].deviceType} (${byType[0].deviceMac}) 历史记录 (${lines.length}条):\n${lines.join('\n')}` }] };
+              return { details: {}, content: [{ type: 'text', text: `${byType[0].deviceType} (${byType[0].deviceMac}) History (${lines.length} records):\n${lines.join('\n')}` }] };
             }
             const lines = byType.map(r => {
               const age = Math.round((Date.now() - r.timestamp) / 1000);
-              const ageStr = age < 60 ? `${age}秒前` : age < 3600 ? `${Math.round(age / 60)}分钟前` : `${Math.round(age / 3600)}小时前`;
+              const ageStr = age < 60 ? `${age}s ago` : age < 3600 ? `${Math.round(age / 60)}m ago` : `${Math.round(age / 3600)}h ago`;
               return `- ${r.deviceType} (${r.deviceMac}): ${JSON.stringify(r.context)} [${ageStr}]`;
             });
             return { details: {}, content: [{ type: 'text', text: lines.join('\n') }] };
           }
-          return { details: {}, content: [{ type: 'text', text: `未找到设备: ${device}` }] };
+          return { details: {}, content: [{ type: 'text', text: `Device not found: ${device}` }] };
         }
 
         if (history) {
           const hist = store.getHistory(device.toUpperCase(), limit || 20);
           const lines = hist.map(r => {
-            const ts = new Date(r.timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+            const ts = new Date(r.timestamp).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' });
             return `[${ts}] ${JSON.stringify(r.context)}`;
           });
-          return { details: {}, content: [{ type: 'text', text: `${record.deviceType} (${record.deviceMac}) 历史记录 (${lines.length}条):\n${lines.join('\n')}` }] };
+          return { details: {}, content: [{ type: 'text', text: `${record.deviceType} (${record.deviceMac}) History (${lines.length} records):\n${lines.join('\n')}` }] };
         }
 
         const age = Math.round((Date.now() - record.timestamp) / 1000);
-        const ageStr = age < 60 ? `${age}秒前` : age < 3600 ? `${Math.round(age / 60)}分钟前` : `${Math.round(age / 3600)}小时前`;
+        const ageStr = age < 60 ? `${age}s ago` : age < 3600 ? `${Math.round(age / 60)}m ago` : `${Math.round(age / 3600)}h ago`;
         return {
           content: [{
             type: 'text',

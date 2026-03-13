@@ -44,8 +44,7 @@
   },
   "uiHints": {
     "token": { "label": "API Token", "placeholder": "Get from SwitchBot App Developer Settings", "sensitive": true },
-    "secret": { "label": "API Secret", "placeholder": "Get from SwitchBot App Developer Settings", "sensitive": true },
-    "monitorDeviceIds": { "label": "Monitor Device IDs", "placeholder": "Enter device MAC addresses to monitor", "tags": ["multiselect"] }
+    "secret": { "label": "API Secret", "placeholder": "Get from SwitchBot App Developer Settings", "sensitive": true }
   },
   "tools": ["switchbot_status"]
 }

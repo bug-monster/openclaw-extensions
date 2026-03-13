@@ -168,6 +168,150 @@ export class DeviceStore {
   }
 
   /**
+   * Clear device history with flexible filtering options
+   */
+  clearHistory(options: {
+    deviceMac?: string | string[];     // Single or multiple device MACs
+    deviceType?: string;               // Filter by device type
+    beforeTimestamp?: number;          // Clear history before this timestamp
+    afterTimestamp?: number;           // Clear history after this timestamp
+    keepLatest?: boolean;              // Keep latest status (default: true)
+    dryRun?: boolean;                  // Preview mode, don't actually delete
+  } = {}): {
+    clearedDevices: string[];
+    totalRecordsCleared: number;
+    details: { [deviceMac: string]: number };
+  } {
+    const {
+      deviceMac,
+      deviceType,
+      beforeTimestamp,
+      afterTimestamp,
+      keepLatest = true,
+      dryRun = false
+    } = options;
+
+    const clearedDevices: string[] = [];
+    let totalRecordsCleared = 0;
+    const details: { [deviceMac: string]: number } = {};
+
+    // Determine target devices
+    let targetMacs: string[] = [];
+    if (deviceMac) {
+      targetMacs = Array.isArray(deviceMac) ? deviceMac : [deviceMac];
+    } else if (deviceType) {
+      // Filter by device type
+      targetMacs = Array.from(this.latest.values())
+        .filter(record => record.deviceType.toLowerCase().includes(deviceType.toLowerCase()))
+        .map(record => record.deviceMac);
+    } else {
+      // All devices
+      targetMacs = Array.from(this.history.keys());
+    }
+
+    // Process each device
+    for (const mac of targetMacs) {
+      const deviceHistory = this.history.get(mac);
+      if (!deviceHistory || deviceHistory.length === 0) continue;
+
+      let recordsToKeep = [...deviceHistory];
+      let recordsCleared = 0;
+
+      // Apply time filtering
+      if (beforeTimestamp !== undefined || afterTimestamp !== undefined) {
+        const originalLength = recordsToKeep.length;
+        recordsToKeep = recordsToKeep.filter(record => {
+          const timestamp = record.timestamp;
+          const beforeOk = beforeTimestamp === undefined || timestamp >= beforeTimestamp;
+          const afterOk = afterTimestamp === undefined || timestamp <= afterTimestamp;
+          return beforeOk && afterOk;
+        });
+        recordsCleared = originalLength - recordsToKeep.length;
+      } else {
+        // Clear all history
+        recordsCleared = recordsToKeep.length;
+        recordsToKeep = [];
+      }
+
+      // Keep latest if requested
+      if (keepLatest && recordsToKeep.length === 0 && deviceHistory.length > 0) {
+        const latestRecord = deviceHistory[deviceHistory.length - 1];
+        recordsToKeep = [latestRecord];
+        recordsCleared = Math.max(0, recordsCleared - 1);
+      }
+
+      // Apply changes if not dry run
+      if (!dryRun && recordsCleared > 0) {
+        if (recordsToKeep.length === 0) {
+          this.history.delete(mac);
+          // Also remove from latest if not keeping latest
+          if (!keepLatest) {
+            this.latest.delete(mac);
+          }
+        } else {
+          this.history.set(mac, recordsToKeep);
+        }
+        this.dirty = true;
+      }
+
+      // Record results
+      if (recordsCleared > 0) {
+        clearedDevices.push(mac);
+        details[mac] = recordsCleared;
+        totalRecordsCleared += recordsCleared;
+      }
+    }
+
+    return {
+      clearedDevices,
+      totalRecordsCleared,
+      details
+    };
+  }
+
+  /**
+   * Clear history for a specific device
+   */
+  clearDeviceHistory(deviceMac: string, keepLatest = true): number {
+    const result = this.clearHistory({ deviceMac, keepLatest });
+    return result.details[deviceMac] || 0;
+  }
+
+  /**
+   * Clear all device history
+   */
+  clearAllHistory(keepLatest = true): { clearedDevices: number; totalRecords: number } {
+    const result = this.clearHistory({ keepLatest });
+    return {
+      clearedDevices: result.clearedDevices.length,
+      totalRecords: result.totalRecordsCleared
+    };
+  }
+
+  /**
+   * Clear history for devices of a specific type
+   */
+  clearHistoryByType(deviceType: string, keepLatest = true): { clearedDevices: string[]; totalRecords: number } {
+    const result = this.clearHistory({ deviceType, keepLatest });
+    return {
+      clearedDevices: result.clearedDevices,
+      totalRecords: result.totalRecordsCleared
+    };
+  }
+
+  /**
+   * Clear old history, keeping only recent N days
+   */
+  clearOldHistory(daysToKeep: number): { clearedDevices: string[]; totalRecords: number } {
+    const cutoffTime = Date.now() - (daysToKeep * 24 * 60 * 60 * 1000);
+    const result = this.clearHistory({ beforeTimestamp: cutoffTime });
+    return {
+      clearedDevices: result.clearedDevices,
+      totalRecords: result.totalRecordsCleared
+    };
+  }
+
+  /**
    * Destroy
    */
   destroy(): void {
